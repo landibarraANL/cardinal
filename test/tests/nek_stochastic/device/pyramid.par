@@ -1,0 +1,24 @@
+[OCCA]
+  backend = CPU
+
+[GENERAL]
+  stopAt = numSteps
+  numSteps = 2
+  dt = 5.0e-4
+  polynomialOrder = 5
+  writeControl = steps
+  writeInterval = 2
+
+[VELOCITY]
+  solver = none
+  viscosity = 1.0
+  density = 1.0
+  residualTol = 1.0e-6
+  boundaryTypeMap = inlet, outlet, wall, wall, wall, wall, wall, wall
+
+[PRESSURE]
+  residualTol = 1.0e-5
+
+[TEMPERATURE]
+  residualTol = 1.0e-5
+  boundaryTypeMap = t, t, t, t, t, t, t, t
