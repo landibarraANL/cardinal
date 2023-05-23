@@ -2,8 +2,9 @@ T_fluid = ${fparse 650.0 + 273.15}
 
 [Mesh]
   [pebble]
-    type = FileMeshGenerator
-    file = sphere_finer_in_m.e
+    type = SphereMeshGenerator
+    nr = 4
+    radius = 0.015
   []
   [repeat]
     type = CombinerGenerator
@@ -45,7 +46,7 @@ T_fluid = ${fparse 650.0 + 273.15}
     T_infinity = T_fluid
     coefficient = 1000.0
     variable = temp
-    boundary = '1'
+    boundary = '0'
   []
 []
 
@@ -83,7 +84,7 @@ T_fluid = ${fparse 650.0 + 273.15}
     to_postprocessors_to_be_preserved = source_integral
   []
   [temp_to_openmc]
-    type = MultiAppMeshFunctionTransfer
+    type = MultiAppShapeEvaluationTransfer
     to_multi_app = openmc
     variable = temp
     source_variable = temp
