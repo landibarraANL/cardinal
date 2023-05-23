@@ -86,9 +86,9 @@ NekRSProblem::NekRSProblem(const InputParameters & params)
   // follows (except that unused terms will be deleted if not needed for coupling)
   //   flux              (if _boundary is true)
   //   heat_source       (if _volume is true and _has_heat_source is true)
-  //   mesh_velocity_x   (if nekrs::hasElasticitySolver() is true)
-  //   mesh_velocity_y   (if nekrs::hasElasticitySolver() is true)
-  //   mesh_velocity_z   (if nekrs::hasElasticitySolver() is true)
+  //   mesh_velocity_x   (if nekrs::hasBlendingSolver() is true)
+  //   mesh_velocity_y   (if nekrs::hasBlendingSolver() is true)
+  //   mesh_velocity_z   (if nekrs::hasBlendingSolver() is true)
   int start = 0;
   if (_boundary)
   {
@@ -102,7 +102,7 @@ NekRSProblem::NekRSProblem(const InputParameters & params)
     _usrwrk_indices.push_back("heat_source");
   }
 
-  if (nekrs::hasElasticitySolver())
+  if (nekrs::hasBlendingSolver())
   {
     indices.mesh_velocity_x = start++ * nekrs::scalarFieldOffset();
     indices.mesh_velocity_y = start++ * nekrs::scalarFieldOffset();
@@ -154,7 +154,7 @@ NekRSProblem::NekRSProblem(const InputParameters & params)
     _displacement_y = (double *)calloc(n_entries, sizeof(double));
     _displacement_z = (double *)calloc(n_entries, sizeof(double));
 
-    if (nekrs::hasElasticitySolver())
+    if (nekrs::hasBlendingSolver())
       _mesh_velocity_elem = (double *)calloc(n_entries, sizeof(double));
   }
 
@@ -206,21 +206,21 @@ NekRSProblem::initialSetup()
   if (boundary && has_temperature_solve)
   {
     for (const auto & b : *boundary)
-      if (!nekrs::mesh::isHeatFluxBoundary(b))
+      if (!nekrs::isHeatFluxBoundary(b))
       {
-        const std::string type = nekrs::mesh::temperatureBoundaryType(b);
+        const std::string type = nekrs::temperatureBoundaryType(b);
         mooseError("In order to send a boundary heat flux to nekRS, you must have a flux condition "
                    "for each 'boundary' set in 'NekRSMesh'!\nBoundary " +
                    std::to_string(b) + " is of type '" + type + "' instead of 'fixedGradient'.");
       }
   }
 
-  if (boundary && nekrs::hasElasticitySolver())
+  if (boundary && nekrs::hasBlendingSolver())
   {
     bool has_one_mv_bc = false;
     for (const auto & b : *boundary)
     {
-      if (nekrs::mesh::isMovingMeshBoundary(b))
+      if (nekrs::isMovingMeshBoundary(b))
       {
         has_one_mv_bc = true;
         break;
@@ -233,7 +233,7 @@ NekRSProblem::initialSetup()
                  " in the [MESH] block.");
   }
 
-  if (!boundary && nekrs::hasElasticitySolver())
+  if (!boundary && nekrs::hasBlendingSolver())
     mooseError("'" + _casename + ".par' has 'solver = elasticity' in the [MESH] block. This solver uses\n"
                "displacement values at a boundary of interest to calcualte the mesh velocity. This\n"
                "mesh velocity is applied within nekRS on the same boundary to solve for fluid flow\n"
@@ -288,7 +288,7 @@ NekRSProblem::initialSetup()
   if (nekrs::hasMovingMesh() && !_disable_fld_file_output)
     nekrs::outfld(_timestepper->nondimensionalDT(_time), _t_step);
 
-  if (nekrs::hasElasticitySolver())
+  if (nekrs::hasBlendingSolver())
     _nek_mesh->initializePreviousDisplacements();
 
   if (nekrs::hasUserMeshSolver())
@@ -380,7 +380,7 @@ NekRSProblem::sendBoundaryHeatFluxToNek()
       if (nekrs::commRank() != _nek_mesh->boundaryCoupling().processor_id(e))
         continue;
 
-      mapFaceDataToNekFace(e, _avg_flux_var, 1.0 / nekrs::solution::referenceFlux(), &_flux_face);
+      mapFaceDataToNekFace(e, _avg_flux_var, 1.0 / nekrs::referenceFlux(), &_flux_face);
       writeBoundarySolution(e, field::flux, _flux_face);
     }
   }
@@ -392,7 +392,7 @@ NekRSProblem::sendBoundaryHeatFluxToNek()
       if (nekrs::commRank() != _nek_mesh->volumeCoupling().processor_id(e))
         continue;
 
-      mapFaceDataToNekVolume(e, _avg_flux_var, 1.0 / nekrs::solution::referenceFlux(), &_flux_elem);
+      mapFaceDataToNekVolume(e, _avg_flux_var, 1.0 / nekrs::referenceFlux(), &_flux_elem);
       writeVolumeSolution(e, field::flux, _flux_elem);
     }
   }
@@ -403,7 +403,7 @@ NekRSProblem::sendBoundaryHeatFluxToNek()
   // flux integral, we need to scale the integral back up again to the dimensional form
   // for the sake of comparison.
   const Real scale_squared = _nek_mesh->scaling() * _nek_mesh->scaling();
-  const double nek_flux_print_mult = scale_squared * nekrs::solution::referenceFlux();
+  const double nek_flux_print_mult = scale_squared * nekrs::referenceFlux();
 
   // integrate the flux over each individual boundary
   std::vector<double> nek_flux_sidesets = nekrs::fluxIntegral(_nek_mesh->boundaryCoupling(), *_boundary);
@@ -476,7 +476,7 @@ void
 NekRSProblem::checkInitialFluxValues(const Real & nek_flux, const Real & moose_flux) const
 {
   const Real scale_squared = _nek_mesh->scaling() * _nek_mesh->scaling();
-  const double nek_flux_print_mult = scale_squared * nekrs::solution::referenceFlux();
+  const double nek_flux_print_mult = scale_squared * nekrs::referenceFlux();
 
   // If before normalization, there is a large difference between the nekRS imposed flux
   // and the MOOSE flux, this could mean that there is a poor match between the domains,
@@ -523,7 +523,7 @@ NekRSProblem::sendVolumeHeatSourceToNek()
     if (nekrs::commRank() != _nek_mesh->volumeCoupling().processor_id(e))
       continue;
 
-    mapVolumeDataToNekVolume(e, _heat_source_var, 1.0 / nekrs::solution::referenceSource(), &_source_elem);
+    mapVolumeDataToNekVolume(e, _heat_source_var, 1.0 / nekrs::referenceSource(), &_source_elem);
     writeVolumeSolution(e, field::heat_source, _source_elem);
   }
 
@@ -536,7 +536,7 @@ NekRSProblem::sendVolumeHeatSourceToNek()
 
   // For the sake of printing diagnostics to the screen regarding source normalization,
   // we first scale the nek source by any unit changes and then by the reference source
-  const double nek_source_print_mult = scale_cubed * nekrs::solution::referenceSource();
+  const double nek_source_print_mult = scale_cubed * nekrs::referenceSource();
   double normalized_nek_source = 0.0;
   bool successful_normalization;
 
@@ -629,7 +629,7 @@ NekRSProblem::syncSolutions(ExternalProblem::Direction direction)
 
       if (nekrs::hasUserMeshSolver())
         sendVolumeDeformationToNek();
-      else if (nekrs::hasElasticitySolver())
+      else if (nekrs::hasBlendingSolver())
         sendBoundaryDeformationToNek();
 
       sendScalarValuesToNek();
