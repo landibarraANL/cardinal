@@ -538,7 +538,7 @@ to MOOSE heat conduction, we use four transfers:
   - wall temperature from OpenMC (which doesn't directly compute the wall temperature, but
     instead receives it from [!ac](THM) through a separate transfer) to MOOSE
 
-- [MultiAppNearestNodeTransfer](https://mooseframework.inl.gov/source/transfers/MultiAppNearestNodeTransfer.html)
+- [MultiAppGeneralFieldNearestNodeTransfer](https://mooseframework.inl.gov/source/transfers/MultiAppGeneralFieldNearestNodeTransfer.html)
   to transfer and conserve heat flux from MOOSE to OpenMC (which isn't used directly in OpenMC, but instead
   gets sent later to [!ac](THM) through a separate transfer)
 
@@ -547,7 +547,7 @@ To couple OpenMC to [!ac](THM), we require three transfers:
 - [MultiAppGeneralFieldUserObjectTransfer](https://mooseframework.inl.gov/source/transfers/MultiAppGeneralFieldUserObjectTransfer.html)
   to send the layer-averaged wall heat flux from OpenMC (which computes the layered-average heat flux from the heat
   flux received from MOOSE heat conduction) to [!ac](THM)
-- [MultiAppNearestNodeTransfer](https://mooseframework.inl.gov/source/transfers/MultiAppNearestNodeTransfer.html)
+- [MultiAppGeneralFieldNearestNodeTransfer](https://mooseframework.inl.gov/source/transfers/MultiAppGeneralFieldNearestNodeTransfer.html)
   to transfer:
 
   - fluid wall temperature from [!ac](THM) to OpenMC (which isn't used directly in OpenMC, but instead
@@ -572,6 +572,9 @@ pressures, and velocities that we will use later in making axial plots
 of the solution. We can automatically output these user objects into
 CSV format by translating the user objects into
 [SpatialUserObjectVectorPostprocessors](https://mooseframework.inl.gov/source/vectorpostprocessors/SpatialUserObjectVectorPostprocessor.html).
+A number of postprocessors are included related to the Monte Carlo
+solution, as well as inlet pressure and pressure drop. See the next section
+for further description.
 
 !listing /tutorials/gas_assembly/openmc.i
   start=UserObjects

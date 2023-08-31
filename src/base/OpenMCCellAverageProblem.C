@@ -726,6 +726,8 @@ OpenMCCellAverageProblem::initialSetup()
 {
   OpenMCProblemBase::initialSetup();
 
+  getOpenMCNuclideDensitiesUserObjects();
+
   if (isParamValid("volume_calculation"))
   {
     const auto & name = getParam<UserObjectName>("volume_calculation");
@@ -2476,15 +2478,11 @@ OpenMCCellAverageProblem::initializeTallies()
           const auto & translation = _mesh_translations[i];
 
           Real volume = 0.0;
-          for (int32_t e = 0; e < _local_tally.at(i)->n_filter_bins(); ++e)
+          int32_t num_elems = _mesh_template->n_bins();
+          for (int32_t e = 0; e < num_elems; ++e)
             volume += _mesh_template->volume(e);
 
-          vt.addRow(i,
-                    _local_tally.at(i)->n_filter_bins(),
-                    translation(0),
-                    translation(1),
-                    translation(2),
-                    volume);
+          vt.addRow(i, num_elems, translation(0), translation(1), translation(2), volume);
         }
 
         vt.print(_console);
@@ -2986,6 +2984,11 @@ OpenMCCellAverageProblem::syncSolutions(ExternalProblem::Direction direction)
         resetTallies();
         setupProblem();
       }
+
+      // Change nuclide composition of material; we put this here so that we can still then change
+      // the _overall_ density (like due to thermal expansion, which does not change the relative
+      // amounts of the different nuclides)
+      sendNuclideDensitiesToOpenMC();
 
       if (_first_transfer)
       {

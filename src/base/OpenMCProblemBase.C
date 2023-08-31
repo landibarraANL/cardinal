@@ -377,7 +377,19 @@ OpenMCProblemBase::setCellTemperature(const int32_t & index,
                                       const cellInfo & cell_info) const
 {
   int err = openmc_cell_set_temperature(index, T, &instance, false);
-  catchOpenMCError(err, "set cell " + printCell(cell_info) + " to temperature " + Moose::stringify(T) + " (K)");
+  if (err)
+  {
+    std::string descriptor =
+        "set cell " + printCell(cell_info) + " to temperature " + Moose::stringify(T) + " (K)";
+    mooseError(
+        "In attempting to ",
+        descriptor,
+        ", OpenMC reported:\n\n",
+        std::string(openmc_err_msg) + "\n\n" +
+            "If you are trying to debug a model setup, you can set 'initial_properties = xml' to\n"
+            "use the initial temperature and density in the OpenMC XML files for OpenMC's first "
+            "run");
+  }
 }
 
 std::vector<int32_t>
@@ -442,9 +454,19 @@ OpenMCProblemBase::setCellDensity(const Real & density, const cellInfo & cell_in
   int err = openmc_material_set_density(
       material_index, density * _density_conversion_factor, units);
 
-  catchOpenMCError(err, "set material with index " +
-               Moose::stringify(material_index) + " to density " +
-               Moose::stringify(density) + " (kg/m3)");
+  if (err)
+  {
+    std::string descriptor = "set material with index " + Moose::stringify(material_index) +
+                             " to density " + Moose::stringify(density) + " (kg/m3)";
+    mooseError(
+        "In attempting to ",
+        descriptor,
+        ", OpenMC reported:\n\n",
+        std::string(openmc_err_msg) + "\n\n" +
+            "If you are trying to debug a model setup, you can set 'initial_properties = xml' to\n"
+            "use the initial temperature and density in the OpenMC XML files for OpenMC's first "
+            "run");
+  }
 }
 
 std::string
@@ -678,6 +700,33 @@ OpenMCProblemBase::subdomainName(const SubdomainID & id) const
   if (name.empty())
     name = std::to_string(id);
   return name;
+}
+
+void
+OpenMCProblemBase::getOpenMCNuclideDensitiesUserObjects()
+{
+  TheWarehouse::Query uo_query = theWarehouse().query().condition<AttribSystem>("UserObject");
+  std::vector<UserObject *> userobjs;
+  uo_query.queryInto(userobjs);
+
+  for (const auto & u : userobjs)
+  {
+    OpenMCNuclideDensities * c = dynamic_cast<OpenMCNuclideDensities *>(u);
+    if (c)
+      _nuclide_densities_uos.push_back(c);
+  }
+}
+
+void
+OpenMCProblemBase::sendNuclideDensitiesToOpenMC()
+{
+  if (_nuclide_densities_uos.size() == 0)
+    return;
+
+  _console << "Sending nuclide compositions to OpenMC... ";
+  for (const auto & uo : _nuclide_densities_uos)
+    uo->setValue();
+  _console << "done" << std::endl;
 }
 
 #endif

@@ -3,7 +3,6 @@
 In this tutorial, you will learn how to:
 
 - Couple NekRS with MOOSE for [!ac](CHT) in a 7-pin bundle
-- Solve both NekRS and MOOSE in dimensional form
 - Control how flux normalization is performed in NekRS (by either lumping all sidesets together,
   or preserving for each sideset individually)
 - Reduce the amount of copy to/from commands between host and device for NekRS
@@ -353,14 +352,12 @@ Begin with the `sfr_7pin.par` file.
 
 !listing /tutorials/sfr_7pin/sfr_7pin.par
 
-This input differs from the `.par` file in [Tutorial 2A](cht1.md) in
-that the input is in dimensional form.
 Boundaries 1 and 2 will receive heat flux from MOOSE, so these two boundaries are set to
 flux boundaries, or `f` for the `[TEMPERATURE]` block. Other settings are largely the same.
 
 The assignment of boundary condition values is performed in the
 `sfr_7pin.oudf` file, shown below. Note that for boundaries 1 and 2, where we want to receive
-heat flux from MOOSE, we set the value of the flux equal to `bc->wrk[bc->idM]`, or
+heat flux from MOOSE, we set the value of the flux equal to `bc->usrwrk[bc->idM]`, or
 the scratch array that is written by [NekRSProblem](/problems/NekRSProblem.md).
 
 !listing /tutorials/sfr_7pin/sfr_7pin.oudf language=cpp

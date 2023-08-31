@@ -33,7 +33,7 @@ on the login nodes, but you need to explicitly load it for compute nodes.
 !listing! language=bash caption=Sample `~/.bashrc` for Bebop id=bb1
 module purge
 module load gcc/9.2.0-pkmzczt
-module load openmpi/4.1.1-bebop-ckyrlu7
+module load openmpi/4.1.1-ckyrlu7
 module load cmake/3.20.3-vedypwm
 module load python/intel-parallel-studio-cluster.2019.5-zqvneip/3.6.9
 
@@ -157,9 +157,11 @@ if [ -f  ~/.bashrc_local ]; then
        . ~/.bashrc_local
 fi
 
-module purge
 module load use.moose
-module load moose-dev
+module load mambaforge3
+module load mvapich2/2.3.3-gcc-9.2.0-xpjm
+module load cmake/3.22.3-gcc-9.2.0-5mqh
+module load gitlfs/3.2.0
 
 # Revise for your repository location
 export NEKRS_HOME=$HOME/projects/cardinal/install
