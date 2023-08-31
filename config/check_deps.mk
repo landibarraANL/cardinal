@@ -9,6 +9,7 @@ NEKRS_CONTENT     := $(shell ls $(NEKRS_DIR) 2> /dev/null)
 OPENMC_CONTENT    := $(shell ls $(OPENMC_DIR) 2> /dev/null)
 DAGMC_CONTENT     := $(shell ls $(DAGMC_DIR) 2> /dev/null)
 MOAB_CONTENT      := $(shell ls $(MOAB_DIR) 2> /dev/null)
+GRIFFIN_CONTENT   := $(shell ls $(GRIFFIN_DIR) 2> /dev/null)
 BISON_CONTENT     := $(shell ls $(BISON_DIR) 2> /dev/null)
 SAM_CONTENT       := $(shell ls $(SAM_DIR) 2> /dev/null)
 SOCKEYE_CONTENT   := $(shell ls $(SOCKEYE_DIR) 2> /dev/null)
@@ -107,11 +108,5 @@ endif
 ifneq ($(SOCKEYE_CONTENT),)
   ifneq ($(SAM_CONTENT),)
     $(error Cannot build Cardinal with both SAM and Sockeye due to a conflict)
-  endif
-endif
-
-ifneq ($(THM_CONTENT),)
-  ifneq ($(SAM_CONTENT),)
-    $(error Cannot build Cardinal with both SAM and the Thermal Hydraulic Module due to a conflict. To build with SAM, you must set 'THERMAL_HYDRAULICS := no' in Cardinal's Makefile)
   endif
 endif

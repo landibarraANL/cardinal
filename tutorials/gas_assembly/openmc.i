@@ -195,64 +195,6 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
   temperature_blocks =    '1 2 4;      101'
 []
 
-[Postprocessors]
-  [flux_integral]
-    type = SideIntegralVariablePostprocessor
-    variable = flux
-    boundary = 'fluid_solid_interface'
-    execute_on = 'transfer linear'
-  []
-  [heat_source]
-    type = ElementIntegralVariablePostprocessor
-    variable = heat_source
-    execute_on = 'transfer initial timestep_end'
-  []
-  [max_tally_rel_err]
-    type = TallyRelativeError
-    value_type = max
-  []
-  [k]
-    type = KEigenvalue
-  []
-  [k_std_dev]
-    type = KStandardDeviation
-  []
-  [min_power]
-    type = ElementExtremeValue
-    variable = heat_source
-    value_type = min
-    block = 'compacts'
-  []
-  [max_power]
-    type = ElementExtremeValue
-    variable = heat_source
-    value_type = max
-    block = 'compacts'
-  []
-  [z_max_power]
-    type = ElementExtremeValue
-    proxy_variable = heat_source
-    variable = z
-    block = 'compacts'
-  []
-  [max_Tf]
-    type = ElementExtremeValue
-    variable = thm_temp
-    block = '101'
-  []
-  [P_in]
-    type = SideAverageValue
-    variable = thm_pressure
-    boundary = '300'
-  []
-  [pressure_drop]
-    type = LinearCombinationPostprocessor
-    pp_names = 'P_in'
-    pp_coefs = '1.0'
-    b = '${fparse -outlet_P}'
-  []
-[]
-
 [MultiApps]
   [bison]
     type = TransientMultiApp
@@ -280,7 +222,7 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
     from_multi_app = bison
   []
   [heat_flux_to_openmc]
-    type = MultiAppNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestNodeTransfer
     fixed_meshes = true
     source_variable = flux
     variable = flux
@@ -312,7 +254,7 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
     source_user_object = q_wall_avg
   []
   [T_wall_from_thm]
-    type = MultiAppNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestNodeTransfer
     source_variable = T_wall
     from_multi_app = thm
     variable = thm_temp_wall
@@ -320,7 +262,7 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
     target_boundary = 'fluid_solid_interface'
   []
   [T_bulk_from_thm]
-    type = MultiAppNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestNodeTransfer
     source_variable = T
     from_multi_app = thm
     variable = thm_temp
@@ -329,14 +271,14 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
 
   # just for postprocessing purposes
   [pressure_from_thm]
-    type = MultiAppNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestNodeTransfer
     source_variable = p
     from_multi_app = thm
     variable = thm_pressure
     fixed_meshes = true
   []
   [velocity_from_thm]
-    type = MultiAppNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestNodeTransfer
     source_variable = vel_z
     from_multi_app = thm
     variable = thm_velocity
@@ -347,7 +289,7 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
 [UserObjects]
   [q_wall_avg]
     type = NearestPointLayeredSideAverage
-    boundary = fluid_solid_interface
+    boundary = 'fluid_solid_interface'
     variable = flux
 
     # Note: make this to match the num_elems in the channel
@@ -404,6 +346,64 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
   [velocity_avg]
     type = SpatialUserObjectVectorPostprocessor
     userobject = average_axial_velocity
+  []
+[]
+
+[Postprocessors]
+  [flux_integral]
+    type = SideIntegralVariablePostprocessor
+    variable = flux
+    boundary = 'fluid_solid_interface'
+    execute_on = 'transfer linear'
+  []
+  [heat_source]
+    type = ElementIntegralVariablePostprocessor
+    variable = heat_source
+    execute_on = 'transfer initial timestep_end'
+  []
+  [max_tally_rel_err]
+    type = TallyRelativeError
+    value_type = max
+  []
+  [k]
+    type = KEigenvalue
+  []
+  [k_std_dev]
+    type = KStandardDeviation
+  []
+  [min_power]
+    type = ElementExtremeValue
+    variable = heat_source
+    value_type = min
+    block = 'compacts'
+  []
+  [max_power]
+    type = ElementExtremeValue
+    variable = heat_source
+    value_type = max
+    block = 'compacts'
+  []
+  [z_max_power]
+    type = ElementExtremeValue
+    proxy_variable = heat_source
+    variable = z
+    block = 'compacts'
+  []
+  [max_Tf]
+    type = ElementExtremeValue
+    variable = thm_temp
+    block = '101'
+  []
+  [P_in]
+    type = SideAverageValue
+    variable = thm_pressure
+    boundary = '300'
+  []
+  [pressure_drop]
+    type = LinearCombinationPostprocessor
+    pp_names = 'P_in'
+    pp_coefs = '1.0'
+    b = '${fparse -outlet_P}'
   []
 []
 
