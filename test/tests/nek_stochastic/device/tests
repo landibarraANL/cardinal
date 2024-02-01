@@ -4,6 +4,7 @@
     command = '${NEKRS_HOME}/bin/nrspre pyramid 1'
     requirement = "The system shall precompile a NekRS case."
     required_objects = 'NekRSProblem'
+    use_shell = True
   []
   [device]
     type = CSVDiff
@@ -15,5 +16,6 @@
                   "Dirichlet boundary condition on temperature, which we confirm by looking at the value of "
                   "temperature on the boundary using postprocessors."
     required_objects = 'NekRSProblem'
+    mesh_mode = replicated
   []
 []

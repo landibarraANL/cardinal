@@ -22,21 +22,7 @@
 #include "NonlinearSystem.h"
 #include "AuxiliarySystem.h"
 #include "UserErrorChecking.h"
-
-#include "mpi.h"
-#include "openmc/bank.h"
-#include "openmc/capi.h"
-#include "openmc/cell.h"
-#include "openmc/geometry.h"
-#include "openmc/geometry_aux.h"
-#include "openmc/hdf5_interface.h"
-#include "openmc/material.h"
-#include "openmc/mesh.h"
-#include "openmc/settings.h"
-#include "openmc/simulation.h"
-#include "openmc/source.h"
-#include "openmc/state_point.h"
-#include "xtensor/xview.hpp"
+#include "CardinalAppTypes.h"
 
 InputParameters
 OpenMCProblemBase::validParams()
@@ -48,11 +34,14 @@ OpenMCProblemBase::validParams()
       "source_strength", "Neutrons/second to normalize the OpenMC tallies; only used for fixed source mode");
   params.addParam<bool>("verbose", false, "Whether to print diagnostic information");
 
+  params.addRequiredParam<MooseEnum>(
+      "tally_type", getTallyTypeEnum(), "Type of tally to use in OpenMC");
+
   params.addRangeCheckedParam<Real>(
       "scaling",
       1.0,
       "scaling > 0.0",
-      "Scaling factor to apply to mesh to get to units of centimeters that OpenMC expects; "
+      "Scaling factor to apply to [Mesh] to get to units of centimeters that OpenMC expects; "
       "setting 'scaling = 100.0', for instance, indicates that the [Mesh] is in units of meters");
 
   // interfaces to directly set some OpenMC parameters
@@ -62,7 +51,7 @@ OpenMCProblemBase::validParams()
       "OpenMC verbosity level; this overrides the setting in the XML files");
   params.addRangeCheckedParam<unsigned int>(
       "inactive_batches",
-      "inactive_batches > 0",
+      "inactive_batches >= 0",
       "Number of inactive batches to run in OpenMC; this overrides the setting in the XML files.");
   params.addRangeCheckedParam<int>("particles",
                                    "particles > 0 ",
@@ -84,6 +73,7 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
   : CardinalProblem(params),
     PostprocessorInterface(this),
     _verbose(getParam<bool>("verbose")),
+    _tally_type(getParam<MooseEnum>("tally_type").getEnum<tally::TallyTypeEnum>()),
     _reuse_source(getParam<bool>("reuse_source")),
     _specified_scaling(params.isParamSetByUser("scaling")),
     _scaling(getParam<Real>("scaling")),
@@ -112,15 +102,26 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
   {
     case openmc::RunMode::EIGENVALUE:
     {
-      checkRequiredParam(params, "power", "running in k-eigenvalue mode");
-      _power = &getPostprocessorValue("power");
+      if (_tally_type != tally::none)
+      {
+        checkRequiredParam(params, "power", "running in k-eigenvalue mode");
+        _power = &getPostprocessorValue("power");
+      }
+      else
+        checkUnusedParam(params, "power", "'tally_type = none'");
+
       checkUnusedParam(params, "source_strength", "running in k-eigenvalue mode");
       break;
     }
     case openmc::RunMode::FIXED_SOURCE:
     {
-      checkRequiredParam(params, "source_strength", "running in fixed source mode");
-      _source_strength = &getPostprocessorValue("source_strength");
+      if (_tally_type != tally::none)
+      {
+        checkRequiredParam(params, "source_strength", "running in fixed source mode");
+        _source_strength = &getPostprocessorValue("source_strength");
+      }
+      else
+        checkUnusedParam(params, "source_strength", "'tally_type = none'");
 
       checkUnusedParam(params, "inactive_batches", "running in fixed source mode");
       checkUnusedParam(params, "reuse_source", "running in fixed source mode");
@@ -574,17 +575,17 @@ OpenMCProblemBase::tallyEstimator(tally::TallyEstimatorEnum estimator) const
 }
 
 openmc::TriggerMetric
-OpenMCProblemBase::triggerMetric(tally::TallyTriggerTypeEnum trigger) const
+OpenMCProblemBase::triggerMetric(trigger::TallyTriggerTypeEnum trigger) const
 {
   switch (trigger)
   {
-    case tally::variance:
+    case trigger::variance:
       return openmc::TriggerMetric::variance;
-    case tally::std_dev:
+    case trigger::std_dev:
       return openmc::TriggerMetric::standard_deviation;
-    case tally::rel_err:
+    case trigger::rel_err:
       return openmc::TriggerMetric::relative_error;
-    case tally::none:
+    case trigger::none:
       return openmc::TriggerMetric::not_active;
     default:
       mooseError("Unhandled TallyTriggerTypeEnum!");
@@ -722,6 +723,9 @@ OpenMCProblemBase::sendNuclideDensitiesToOpenMC()
 {
   if (_nuclide_densities_uos.size() == 0)
     return;
+
+  // We could probably put this somewhere better, but it's good for now
+  executeControls(EXEC_SEND_OPENMC_DENSITIES);
 
   _console << "Sending nuclide compositions to OpenMC... ";
   for (const auto & uo : _nuclide_densities_uos)

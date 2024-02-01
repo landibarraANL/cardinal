@@ -59,8 +59,9 @@
   tally_type = mesh
   mesh_template = msr.e
 
-  fluid_blocks = '1'
-  fluid_cell_level = 0
+  density_blocks = '1'
+  temperature_blocks = '1'
+  cell_level = 0
 
   power = 300.0e6
 
@@ -104,13 +105,13 @@ tmax = 1150.0
 
 [Transfers]
   [temp_to_openmc]
-    type = MultiAppGeneralFieldNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestLocationTransfer
     from_multi_app = nek
     variable = temp
     source_variable = temp
   []
   [power_to_nek]
-    type = MultiAppGeneralFieldNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestLocationTransfer
     to_multi_app = nek
     source_variable = kappa_fission
     variable = heat_source

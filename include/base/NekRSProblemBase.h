@@ -25,6 +25,8 @@
 #include "Transient.h"
 
 #include <memory>
+#include "inipp.hpp"
+#include "nekrs.hpp"
 
 /**
  * Base class for all MOOSE wrappings of NekRS. This class is used to facilitate
@@ -135,7 +137,7 @@ public:
 
   virtual void externalSolve() override;
 
-  virtual bool converged() override { return true; }
+  virtual bool converged(unsigned int) override { return true; }
 
   virtual void addExternalVariables() override;
 

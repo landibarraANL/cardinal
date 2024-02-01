@@ -25,9 +25,22 @@
 #include "CardinalEnums.h"
 #include "OpenMCNuclideDensities.h"
 
-#include "openmc/tallies/filter_cell_instance.h"
+#include "mpi.h"
+#include "openmc/bank.h"
+#include "openmc/capi.h"
+#include "openmc/cell.h"
+#include "openmc/geometry.h"
+#include "openmc/geometry_aux.h"
+#include "openmc/hdf5_interface.h"
+#include "openmc/material.h"
 #include "openmc/mesh.h"
+#include "openmc/settings.h"
+#include "openmc/simulation.h"
+#include "openmc/source.h"
+#include "openmc/state_point.h"
 #include "openmc/tallies/tally.h"
+#include "openmc/tallies/filter_cell_instance.h"
+#include "xtensor/xview.hpp"
 
 /**
  * Base class for all MOOSE wrappings of OpenMC
@@ -104,7 +117,7 @@ public:
    * @param[in] trigger trigger metric
    * @return OpenMC enum
    */
-  openmc::TriggerMetric triggerMetric(tally::TallyTriggerTypeEnum trigger) const;
+  openmc::TriggerMetric triggerMetric(trigger::TallyTriggerTypeEnum trigger) const;
 
   /**
    * Convert from a MooseEnum for tally estimator to an OpenMC enum
@@ -352,6 +365,9 @@ protected:
 
   /// Whether to print diagnostic information about model setup and the transfers
   const bool & _verbose;
+
+  /// Type of tally to apply to extract score from OpenMC
+  const tally::TallyTypeEnum _tally_type;
 
   /// Power by which to normalize the OpenMC results, for k-eigenvalue mode
   const Real * _power;

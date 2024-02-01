@@ -143,6 +143,28 @@ export PATH=/shared/cmake-3.24.2/bin:$PATH
 
 !listing scripts/job_nek5k language=bash caption=Sample job script for Nek5k id=nk
 
+## Pinchot
+
+Pinchot is a small Ubuntu server at the University of Illinois hosted in Dr. Novak's lab. While not an [!ac](HPC) system per se, we include these instructions on this page to facilitate development among the Cardinal team. There is no job queue on Pinchot.
+
+!listing! language=bash caption=Sample `~/.bashrc` for Pinchot id=p1
+
+module load openmpi/ubuntu/5.0.0
+module load hdf5/ubuntu/1.14.3
+
+# Revise for your cross section location
+export OPENMC_CROSS_SECTIONS=/shared/data/endfb-vii.1-hdf5/cross_sections.xml
+
+# This is needed because the shared directory is actually a symlink;
+# to point to Cardinal somewhere else, just change NEKRS_HOME
+SHARE_DIR_SYM_LINK=$(realpath -P /shared/data/cardinal)
+export NEKRS_HOME=${SHARE_DIR_SYM_LINK}/install
+
+export LIBMESH_JOBS=80
+export MOOSE_JOBS=80
+export HDF5_ROOT=/software/HDF5-1.14.3-ubuntu22
+!listing-end!
+
 ## Sawtooth
 
 [Sawtooth](https://nsuf.inl.gov/Page/computing_resources)
@@ -157,15 +179,15 @@ if [ -f  ~/.bashrc_local ]; then
        . ~/.bashrc_local
 fi
 
+module purge
 module load use.moose
-module load mambaforge3
-module load mvapich2/2.3.3-gcc-9.2.0-xpjm
-module load cmake/3.22.3-gcc-9.2.0-5mqh
-module load gitlfs/3.2.0
+module load moose-tools
+module load openmpi/4.1.5_ucx1.14.1
+module load cmake/3.27.7-oneapi-2023.2.1-4uzb
 
 # Revise for your repository location
-export NEKRS_HOME=$HOME/projects/cardinal/install
-export OPENMC_CROSS_SECTIONS=$HOME/projects/cross_sections/endfb-vii.1-hdf5/cross_sections.xml
+export NEKRS_HOME=$HOME/cardinal/install
+export OPENMC_CROSS_SECTIONS=$HOME/cross_sections/endfb-vii.1-hdf5/cross_sections.xml
 !listing-end!
 
 !listing scripts/job_sawtooth language=bash caption=Sample job script with the `moose` project code id=st2

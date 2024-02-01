@@ -1,7 +1,10 @@
 # Optional environment variables:
 #
 # To control where various third-party dependencies are. You don't need to set
-# any of these unless you want to use non-submodule third-party dependencies:
+# any of these unless you want to use non-submodule third-party dependencies.
+# NOTE: If you change any of these partway through a build, you will need to
+# clear out the build/ and install/ directories to be sure the proper build
+# flags are used.
 
 # * CONTRIB_DIR      : Dir with third-party dependencies (default: contrib)
 # * MOOSE_DIR        : Top-level MOOSE dir (default: $(CONTRIB_DIR)/moose)
@@ -115,7 +118,7 @@ endif
 
 ifeq ($(ENABLE_OPENMC), yes)
   # HDF5 is only needed to be linked if using OpenMC
-  $(info Cardinal is using HDF5 from $(HDF5_ROOT))
+  $(info Cardinal is using HDF5 from    $(HDF5_ROOT))
 else
   ifeq ($(ENABLE_DAGMC), yes)
     $(info Ignoring ENABLE_DAGMC because OpenMC is not enabled.)
@@ -131,17 +134,18 @@ endif
 ALL_MODULES         := no
 
 FLUID_PROPERTIES    := yes
-HEAT_CONDUCTION     := yes
+HEAT_TRANSFER       := yes
 NAVIER_STOKES       := yes
 REACTOR             := yes
+SOLID_PROPERTIES    := yes
 STOCHASTIC_TOOLS    := yes
 TENSOR_MECHANICS    := yes
 THERMAL_HYDRAULICS  := yes
 
-# Perform various checks on the dependencies: (i) error if dependencies are
-# missing or conflict with one another; (ii) warn if not using a paired
-# submodule hash; (iii) check that NEKRS_HOME points to the correct location
+# Perform various checks on the dependencies
 include config/check_deps.mk
+include config/check_modules.mk
+
 
 # BUILD_TYPE will be passed to CMake via CMAKE_BUILD_TYPE
 ifeq ($(METHOD),dbg)
@@ -177,11 +181,13 @@ NEKRS_INCLUDES := \
 	-I$(NEKRS_DIR)/src/neknek \
 	-I$(NEKRS_DIR)/src/plugins \
 	-I$(NEKRS_DIR)/src/pointInterpolation \
+	-I$(NEKRS_DIR)/src/pointInterpolation/findpts \
 	-I$(NEKRS_DIR)/src/postProcessing \
 	-I$(NEKRS_DIR)/src/regularization \
 	-I$(NEKRS_DIR)/src/setup \
 	-I$(NEKRS_DIR)/src/solvers/cvode \
 	-I$(NEKRS_DIR)/src/solvers/elliptic \
+	-I$(NEKRS_DIR)/src/solvers/elliptic/amgSolver \
 	-I$(NEKRS_DIR)/src/solvers/elliptic/linearSolver \
 	-I$(NEKRS_DIR)/src/solvers/elliptic/MG \
 	-I$(NEKRS_DIR)/src/udf \
@@ -401,7 +407,18 @@ ifeq ($(ENABLE_NEK), yes)
 endif
 
 ifeq ($(ENABLE_OPENMC), yes)
-  ADDITIONAL_LIBS += -L$(OPENMC_LIBDIR) -lopenmc -lhdf5_hl $(CC_LINKER_SLFLAG)$(OPENMC_LIBDIR)
+  ADDITIONAL_LIBS += -L$(OPENMC_LIBDIR) -lopenmc -lhdf5_hl
+  ifeq ($(ENABLE_DAGMC), ON)
+    ADDITIONAL_LIBS += -luwuw -ldagmc -lpyne_dagmc -lMOAB
+  endif
+  ADDITIONAL_LIBS += $(CC_LINKER_SLFLAG)$(OPENMC_LIBDIR)
+endif
+
+# Determin if we need libpng and where using pkg-config (if available)
+LIBPNG_FLAGS ?= $(shell pkg-config --libs libpng 2>/dev/null)
+ifneq (,$(findstring -lpng, $(LIBPNG_FLAGS)))
+  ADDITIONAL_LIBS += $(LIBPNG_FLAGS)
+  $(info Linking libpng: $(LIBPNG_FLAGS))
 endif
 
 include            $(FRAMEWORK_DIR)/app.mk
@@ -422,11 +439,14 @@ ifeq ($(ENABLE_NEK), yes)
 endif
 
 ifeq ($(ENABLE_OPENMC), yes)
-  CARDINAL_EXTERNAL_FLAGS += -L$(OPENMC_LIBDIR) -L$(HDF5_LIBDIR) -lopenmc \
-	                           $(CC_LINKER_SLFLAG)$(OPENMC_LIBDIR) \
+  CARDINAL_EXTERNAL_FLAGS += -L$(OPENMC_LIBDIR) -L$(HDF5_LIBDIR) -lopenmc
+  ifeq ($(ENABLE_DAGMC), ON)
+    CARDINAL_EXTERNAL_FLAGS += -luwuw -ldagmc -lpyne_dagmc -lMOAB
+  endif
+  CARDINAL_EXTERNAL_FLAGS += $(CC_LINKER_SLFLAG)$(OPENMC_LIBDIR) \
 	                           $(CC_LINKER_SLFLAG)$(HDF5_LIBDIR)
 endif
-
+#
 # EXTERNAL_FLAGS are for rules in app.mk
 $(app_LIB): EXTERNAL_FLAGS := $(CARDINAL_EXTERNAL_FLAGS)
 $(app_test_LIB): EXTERNAL_FLAGS := $(CARDINAL_EXTERNAL_FLAGS)

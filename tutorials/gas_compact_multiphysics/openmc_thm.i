@@ -6,8 +6,8 @@
 
 num_layers_for_THM = 150
 num_layers = 50
-fluid_blocks = 'coolant'
-solid_blocks = 'graphite compacts compacts_trimmer_tri'
+density_blocks = 'coolant'
+temperature_blocks = 'graphite compacts compacts_trimmer_tri'
 fuel_blocks = 'compacts compacts_trimmer_tri'
 
 unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * unit_cell_height / height}
@@ -31,7 +31,7 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
   [thm_temp_wall]
     family = MONOMIAL
     order = CONSTANT
-    block = ${fluid_blocks}
+    block = ${density_blocks}
   []
   [flux]
   []
@@ -99,18 +99,16 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
 
   power = ${unit_cell_power}
   scaling = 100.0
-  solid_blocks = ${solid_blocks}
-  fluid_blocks = ${fluid_blocks}
+  density_blocks = ${density_blocks}
   tally_blocks = ${fuel_blocks}
   tally_type = cell
   tally_name = heat_source
-  solid_cell_level = 1
-  fluid_cell_level = 1
+  cell_level = 1
 
   relaxation = robbins_monro
 
   temperature_variables = 'solid_temp; thm_temp'
-  temperature_blocks = '${solid_blocks}; ${fluid_blocks}'
+  temperature_blocks = '${temperature_blocks}; ${density_blocks}'
 
   k_trigger = std_dev
   k_trigger_threshold = 7.5e-4
@@ -156,7 +154,7 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
     from_multi_app = bison
   []
   [heat_flux_to_openmc]
-    type = MultiAppGeneralFieldNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestLocationTransfer
     fixed_meshes = true
     source_variable = flux
     variable = flux
@@ -188,14 +186,14 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
     source_user_object = q_wall_avg
   []
   [T_wall_from_thm]
-    type = MultiAppGeneralFieldNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = T_wall
     from_multi_app = thm
     variable = thm_temp_wall
     fixed_meshes = true
   []
   [T_bulk_from_thm]
-    type = MultiAppGeneralFieldNearestNodeTransfer
+    type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = T
     from_multi_app = thm
     variable = thm_temp
