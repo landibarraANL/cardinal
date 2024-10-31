@@ -13,11 +13,6 @@ To access this tutorial,
 cd cardinal/tutorials/pincell_multiphysics
 ```
 
-!alert! note title=Computing Needs
-This tutorial does not require any special computing needs.
-For testing purposes, you may choose to decrease the number of particles to solve faster.
-!alert-end!
-
 ## Geometry and Computational Model
 
 The geometry consists of a single pincell, cooled by sodium. The dimensions and assumed operating conditions
@@ -121,7 +116,7 @@ python pincell.py
 
 ### Heat Conduction Model
 
-The MOOSE heat conduction module is used to solve for [energy conservation in the solid](theory/heat_eqn.md).
+The MOOSE heat transfer module is used to solve for [energy conservation in the solid](theory/heat_eqn.md).
 The solid mesh is shown in [solid_mesh]. This mesh is generated using MOOSE's
 [reactor module](https://mooseframework.inl.gov/modules/reactor/index.html), which can be used to make
 sophisticated meshes of typical reactor geometries such as pin lattices, ducts, and reactor vessels.
@@ -250,11 +245,11 @@ saturation temperature).
   start=AuxVariables
   end=ICs
 
-Next, the `Problem` block defines all the parameters related to coupling
+Next, the `[Problem]` and `[Tallies]` blocks define all the parameters related to coupling
 OpenMC to MOOSE. We will send temperature to OpenMC from blocks 2 and 3
 (which represent the solid regions) and we will send temperature and density
-to OpenMC from block 1 (which represents the fluid region). We will have
-Cardinal automatically set up cell tallies.
+to OpenMC from block 1 (which represents the fluid region). We add a
+[CellTally](/tallies/CellTally.md) to tally the heat source in the fuel.
 
 For this problem, the temperature that gets mapped into OpenMC is sourced
 from two different applications, which we can customize using the
@@ -290,7 +285,7 @@ Finally, we will use a [Transient](https://mooseframework.inl.gov/source/executi
 ### Solid Input Files
   id=solid_model
 
-The conservation of solid energy is solved using the MOOSE heat conduction module. The input
+The conservation of solid energy is solved using the MOOSE heat transfer module. The input
 file for this portion of the physics is `bison.i`. We begin by defining a
 number of constants and setting the mesh.
 

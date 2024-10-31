@@ -69,7 +69,7 @@ def coolant_temp(t_in, t_out, l, z):
 
 def coolant_density(t):
   """
-  Computes the helium density from temperature assuming a fixed operating pressure.
+  Computes the helium density (kg/m3) from temperature assuming a fixed operating pressure.
 
   Parameters
   ----------
@@ -82,8 +82,8 @@ def coolant_density(t):
     float or 1-D numpy array of float depending on t
   """
 
-  p_in_bar = specs.outlet_P * 1.0e-5;
-  return 48.14 * p_in_bar / (t + 0.4446 * p_in_bar / math.pow(t, 0.2));
+  p_in_bar = specs.outlet_P * 1.0e-5
+  return 48.14 * p_in_bar / (t + 0.4446 * p_in_bar / math.pow(t, 0.2))
 
 # -------------- Unit Conversions: OpenMC requires cm -----------
 m = 100.0
@@ -190,8 +190,7 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
 
     # reflector is 40 percent helium by volume (arbitrary assumption), with helium
     # at the inlet conditions
-    rho = coolant_density(specs.inlet_T)
-    matrix_density = 1700
+    rho = coolant_density(specs.inlet_T) # kg/m3
     reflector_porosity = 0.40
     n_helium = reflector_porosity * rho / 4.002602
     n_carbon = (1.0 - reflector_porosity) * matrix_density / 12.0107
@@ -231,7 +230,7 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     # region in which TRISOs are generated
     r_triso = -fuel_cyl & +min_z & -max_z
 
-    rand_spheres = openmc.model.pack_spheres(radius=radius_pyc_outer, region=r_triso, pf=specs.triso_pf)
+    rand_spheres = openmc.model.pack_spheres(radius=radius_pyc_outer, region=r_triso, pf=specs.triso_pf, seed=1.0)
     random_trisos = [openmc.model.TRISO(radius_pyc_outer, u_triso, i) for i in rand_spheres]
 
     llc, urc = r_triso.bounding_box
@@ -312,8 +311,6 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
 
     hexagon_volume = reactor_height * math.sqrt(3) / 2.0 * bundle_pitch**2
     coolant_channel_volume = math.pi * coolant_channel_diam**2 / 4.0 * reactor_height
-    print('Volume of fuel bundle (m3): ', hexagon_volume / (100**3))
-    print('Volume of solid regions in fuel bundle (m3): ', (hexagon_volume - 108 * coolant_channel_volume) / (100**3))
 
     graphite_outer_cell = openmc.Cell(fill=m_graphite_matrix)
     graphite_outer_cell.temperature = T
@@ -328,8 +325,8 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     max_z = axial_planes[-1]
 
     # fill the unit cell with the hex lattice
-    hex_prism = openmc.hexagonal_prism(bundle_pitch / math.sqrt(3.0), 'x', boundary_type='periodic')
-    outer_cell = openmc.Cell(region=hex_prism & +min_z & -max_z, fill=hex_lattice)
+    hex_prism = openmc.model.HexagonalPrism(bundle_pitch / math.sqrt(3.0), 'x', boundary_type='periodic')
+    outer_cell = openmc.Cell(region=-hex_prism & +min_z & -max_z, fill=hex_lattice)
 
     # add the top and bottom reflector
     top_refl_z = reactor_height + top_reflector_height
@@ -337,8 +334,8 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     bottom_refl_z = -bottom_reflector_height
     bottom_refl = openmc.ZPlane(z0=bottom_refl_z, boundary_type='vacuum')
 
-    top_refl_cell = openmc.Cell(region=hex_prism & +max_z & -top_refl, fill=m_reflector)
-    bottom_refl_cell = openmc.Cell(region=hex_prism & -min_z & +bottom_refl, fill=m_reflector)
+    top_refl_cell = openmc.Cell(region=-hex_prism & +max_z & -top_refl, fill=m_reflector)
+    bottom_refl_cell = openmc.Cell(region=-hex_prism & -min_z & +bottom_refl, fill=m_reflector)
     top_refl_cell.temperature = specs.inlet_T
     bottom_refl_cell.temperature = coolant_outlet_temp
 
@@ -357,7 +354,7 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     lower_left = (-l, -l, reactor_bottom)
     upper_right = (l, l, reactor_top)
     source_dist = openmc.stats.Box(lower_left, upper_right, only_fissionable=True)
-    source = openmc.Source(space=source_dist)
+    source = openmc.IndependentSource(space=source_dist)
     settings.source = source
 
     if (add_entropy_mesh):
@@ -407,8 +404,7 @@ def assembly(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     plot3.pixels   = plot2.pixels
     plot3.color_by = 'cell'
 
-    #model.plots = openmc.Plots([plot1, plot2, plot3])
-    model.plots = openmc.Plots([plot2])
+    model.plots = openmc.Plots([plot1, plot2, plot3])
 
     return model
 

@@ -14,14 +14,6 @@
 []
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-  [cell_instance]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [cell_temperature]
     family = MONOMIAL
     order = CONSTANT
@@ -29,14 +21,6 @@
 []
 
 [AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-  [cell_instance]
-    type = CellInstanceAux
-    variable = cell_instance
-  []
   [cell_temperature]
     type = CellTemperatureAux
     variable = cell_temperature
@@ -48,11 +32,16 @@
   verbose = true
   power = 1500.0
   temperature_blocks = '0'
-  tally_blocks = '0'
-  tally_type = cell
-  tally_name = heat_source
   cell_level = 1
   scaling = 100.0
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      blocks = '0'
+      name = heat_source
+    []
+  []
 []
 
 [Executioner]

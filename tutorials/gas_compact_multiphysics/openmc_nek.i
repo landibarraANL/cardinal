@@ -85,15 +85,10 @@ N = 1000
 
 [Problem]
   type = OpenMCCellAverageProblem
-  output = 'unrelaxed_tally_std_dev'
-  check_equal_mapped_tally_volumes = true
 
   power = ${unit_cell_power}
   scaling = 100.0
   density_blocks = ${density_blocks}
-  tally_blocks = ${fuel_blocks}
-  tally_type = cell
-  tally_name = heat_source
   cell_level = 1
 
   relaxation = robbins_monro
@@ -103,11 +98,24 @@ N = 1000
 
   k_trigger = std_dev
   k_trigger_threshold = 7.5e-4
-  tally_trigger = rel_err
-  tally_trigger_threshold = 1e-2
   batches = 40
   max_batches = 100
   batch_interval = 5
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      blocks = ${fuel_blocks}
+      name = heat_source
+
+      check_equal_mapped_tally_volumes = true
+
+      trigger = rel_err
+      trigger_threshold = 1e-2
+
+      output = 'unrelaxed_tally_std_dev'
+    []
+  []
 []
 
 [Executioner]
@@ -124,7 +132,6 @@ N = 1000
 [MultiApps]
   [bison]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'solid_nek.i'
     execute_on = timestep_end
     sub_cycling = true
@@ -139,7 +146,7 @@ N = 1000
     from_multi_app = bison
   []
   [source_to_bison]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = heat_source
     variable = power
     to_multi_app = bison
@@ -147,7 +154,7 @@ N = 1000
     to_postprocessors_to_be_preserved = power
   []
   [temp_from_nek]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = nek_bulk_temp
     from_multi_app = bison
     variable = nek_temp

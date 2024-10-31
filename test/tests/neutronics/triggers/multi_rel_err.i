@@ -21,17 +21,21 @@
   type = OpenMCCellAverageProblem
   power = 100.0
   batches = 20
-  temperature_blocks = '100'
   cell_level = 0
-  tally_type = cell
   normalize_by_global_tally = false
-  initial_properties = xml
 
-  tally_score = 'damage_energy kappa_fission'
-
-  tally_trigger = rel_err
-  tally_trigger_threshold = 2e-2
   max_batches = 200
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '100'
+      score = 'damage_energy kappa_fission'
+
+      trigger = 'rel_err rel_err'
+      trigger_threshold = '2e-2 2e-2'
+    []
+  []
 []
 
 [Executioner]

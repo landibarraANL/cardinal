@@ -22,6 +22,7 @@
 #include "ModulesApp.h"
 #include "MooseSyntax.h"
 #include "CardinalAppTypes.h"
+#include "CardinalRevision.h"
 
 #ifdef ENABLE_NEK_COUPLING
 #include "NekSyntax.h"
@@ -67,7 +68,9 @@ CardinalApp::validParams()
   // or just plain MOOSE-type apps), these are unused
   params.addCommandLineParam<int>(
       "nekrs_buildonly", "--nekrs-buildonly [#procs]", "#procs to build NekRS if pre-compiling");
-  params.addCommandLineParam<int>("nekrs_cimode", "--nekrs-cimode [id]", "CI test ID for NekRS");
+  params.addCommandLineParam<int>("nekrs_cimode",
+                                  "--nekrs-cimode [id]",
+                                  "Test ID for NekRS CI settings for execution within Cardinal");
   params.addCommandLineParam<std::string>(
       "nekrs_backend",
       "--nekrs-backend",
@@ -76,6 +79,7 @@ CardinalApp::validParams()
       "nekrs_device_id", "--nekrs-device-id", "NekRS device ID");
 
   params.set<bool>("use_legacy_material_output") = false;
+  params.set<bool>("use_legacy_initial_residual_evaluation_behavior") = false;
   params.set<bool>("error_unused") = false;
   params.set<bool>("allow_unused") = true;
   return params;
@@ -174,6 +178,21 @@ CardinalApp::associateSyntaxInner(Syntax & syntax, ActionFactory & /* action_fac
   registerSyntax("VolumetricHeatSourceICAction", "Cardinal/ICs/VolumetricHeatSource");
   registerSyntax("BulkEnergyConservationICAction", "Cardinal/ICs/BulkEnergyConservation");
 
+#ifdef ENABLE_OPENMC_COUPLING
+  // Add the [Problem/Filters] block
+  registerSyntaxTask("AddFilterAction", "Problem/Filters/*", "add_filters");
+  registerMooseObjectTask("add_filters", Filter, false);
+  addTaskDependency("add_filters", "init_displaced_problem");
+
+  // Add the [Problem/Tallies] block
+  registerSyntaxTask("AddTallyAction", "Problem/Tallies/*", "add_tallies");
+  registerMooseObjectTask("add_tallies", Tally, false);
+  addTaskDependency("add_tallies",
+                    "add_filters"); // Make sure filters are constructed before tallies.
+  // Can only add external auxvars after the tallies have been added.
+  addTaskDependency("add_external_aux_variables", "add_tallies");
+#endif
+
   registerTask("add_heat_source_ic", false /* is required */);
   addTaskDependency("add_heat_source_ic", "add_ic");
 
@@ -185,6 +204,12 @@ CardinalApp::associateSyntaxInner(Syntax & syntax, ActionFactory & /* action_fac
 
   registerTask("add_bulk_fluid_temperature_user_object", false /* is required */);
   addTaskDependency("add_bulk_fluid_temperature_user_object", "add_heat_source_ic");
+}
+
+std::string
+CardinalApp::getInstallableInputs() const
+{
+  return CARDINAL_INSTALLABLE_DIRS;
 }
 
 /***************************************************************************************************

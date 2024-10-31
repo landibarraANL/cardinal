@@ -16,14 +16,6 @@
 
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-  [cell_instance]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [cell_temperature]
     family = MONOMIAL
     order = CONSTANT
@@ -31,14 +23,6 @@
 []
 
 [AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-  [cell_instance]
-    type = CellInstanceAux
-    variable = cell_instance
-  []
   [cell_temperature]
     type = CellTemperatureAux
     variable = cell_temperature
@@ -50,15 +34,20 @@
   verbose = true
   power = 1500.0
   temperature_blocks = '0'
-  tally_type = mesh
-  tally_name = heat_source
-  mesh_template = mesh_in.e
-  mesh_translations = '0 0 0.02
-                       0 0 0.06
-                       0 0 0.10'
   normalize_by_global_tally = false
   cell_level = 1
   scaling = 100.0
+
+  [Tallies]
+    [heat_source]
+      type = MeshTally
+      mesh_translations = '0 0 0.02
+                           0 0 0.06
+                           0 0 0.10'
+      mesh_template = mesh_in.e
+      name = heat_source
+    []
+  []
 []
 
 [Executioner]

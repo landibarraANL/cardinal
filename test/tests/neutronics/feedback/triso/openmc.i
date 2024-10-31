@@ -6,14 +6,6 @@
 []
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-  [cell_instance]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [cell_temperature]
     family = MONOMIAL
     order = CONSTANT
@@ -21,14 +13,6 @@
 []
 
 [AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-  [cell_instance]
-    type = CellInstanceAux
-    variable = cell_instance
-  []
   [cell_temperature]
     type = CellTemperatureAux
     variable = cell_temperature
@@ -53,16 +37,21 @@
 [Problem]
   type = OpenMCCellAverageProblem
   verbose = true
-  check_equal_mapped_tally_volumes = true
   identical_cell_fills = '2'
   check_identical_cell_fills = true
 
   power = 100.0
   scaling = 100.0
   temperature_blocks = '1 2'
-  tally_blocks = '2'
-  tally_type = cell
   cell_level = 1
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '2'
+      check_equal_mapped_tally_volumes = true
+    []
+  []
 []
 
 

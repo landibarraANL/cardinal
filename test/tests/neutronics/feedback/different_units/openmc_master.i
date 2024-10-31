@@ -26,7 +26,7 @@
   [rho]
     type = ParsedAux
     variable = density
-    function = '-0.4884*temp+2413.0'
+    expression = '-0.4884*temp+2413.0'
     coupled_variables = 'temp'
   []
 []
@@ -79,7 +79,6 @@
 [MultiApps]
   [openmc]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'openmc.i'
     execute_on = timestep_end
   []
@@ -100,14 +99,14 @@
     to_multi_app = openmc
     variable = temp
     source_variable = temp
-    fixed_meshes = true
+    search_value_conflicts = false
   []
   [density_to_openmc]
     type = MultiAppGeneralFieldNearestLocationTransfer
     to_multi_app = openmc
     variable = density
     source_variable = density
-    fixed_meshes = true
+    search_value_conflicts = false
   []
 []
 

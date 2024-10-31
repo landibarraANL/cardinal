@@ -37,10 +37,10 @@ TallyRelativeError::validParams()
                              getOperationEnum(),
                              "Whether to give the maximum or minimum tally relative error");
 
-  MooseEnum score(
-    "heating heating_local kappa_fission fission_q_prompt fission_q_recoverable damage_energy flux");
-  params.addParam<MooseEnum>(
-      "tally_score", score, "Score to report the relative error. If there is just a single score, "
+  params.addParam<MultiMooseEnum>(
+      "tally_score",
+      getTallyScoreEnum(),
+      "Score to report the relative error. If there is just a single score, "
       "this defaults to that value");
   params.addClassDescription("Extract the maximum/minimum tally relative error");
   return params;
@@ -53,18 +53,23 @@ TallyRelativeError::TallyRelativeError(const InputParameters & parameters)
   auto added_scores = _openmc_problem->getTallyScores();
   if (isParamValid("tally_score"))
   {
-    auto tally_score = getParam<MooseEnum>("tally_score");
-    std::string score = tally_score;
-    std::transform(score.begin(), score.end(), score.begin(),
-      [](unsigned char c){ return std::tolower(c); });
-    std::replace(score.begin(), score.end(), '_', '-');
+    const auto & tally_score = getParam<MultiMooseEnum>("tally_score");
+    if (tally_score.size() != 1)
+      paramError(
+          "tally_score",
+          "Can only specify a single tally score per postprocessor, but you have specified " +
+              std::to_string(tally_score.size()));
+
+    std::string score = _openmc_problem->enumToTallyScore(tally_score[0]);
 
     auto it = std::find(added_scores.begin(), added_scores.end(), score);
     if (it != added_scores.end())
       _tally_index = it - added_scores.begin();
     else
-      mooseError("To extract the relative error of the '" + std::string(tally_score) + "' score,"
-        "that score must be included in the\n'tally_score' parameter of '" + _openmc_problem->type() + "'!");
+      mooseError("To extract the relative error of the '" + std::string(tally_score[0]) +
+                 "' score,"
+                 "that score must be included in the\n'tally_score' parameter of '" +
+                 _openmc_problem->type() + "'!");
   }
   else
   {
@@ -79,24 +84,29 @@ TallyRelativeError::TallyRelativeError(const InputParameters & parameters)
 Real
 TallyRelativeError::getValue() const
 {
-  const auto & tally = _openmc_problem->getLocalTally();
+  const auto & tallies = _openmc_problem->getLocalTally();
 
-  Real extreme_value;
+  Real post_processor_value;
 
   switch (_type)
   {
     case operation::max:
-      extreme_value = std::numeric_limits<Real>::min();
+      post_processor_value = std::numeric_limits<Real>::min();
       break;
     case operation::min:
-      extreme_value = std::numeric_limits<Real>::max();
+      post_processor_value = std::numeric_limits<Real>::max();
+      break;
+    case operation::average:
+      post_processor_value = 0.0;
       break;
     default:
       mooseError("Unhandled OperationEnum!");
   }
 
-  for (const auto & t : tally)
+  unsigned int num_values = 0;
+  for (const auto & tally : tallies)
   {
+    const auto t = tally->getWrappedTally();
     auto sum = xt::view(t->results_, xt::all(), _tally_index, static_cast<int>(openmc::TallyResult::SUM));
     auto sum_sq =
         xt::view(t->results_, xt::all(), _tally_index, static_cast<int>(openmc::TallyResult::SUM_SQ));
@@ -112,10 +122,14 @@ TallyRelativeError::getValue() const
       switch (_type)
       {
         case operation::max:
-          extreme_value = std::max(extreme_value, rel_err[i]);
+          post_processor_value = std::max(post_processor_value, rel_err[i]);
           break;
         case operation::min:
-          extreme_value = std::min(extreme_value, rel_err[i]);
+          post_processor_value = std::min(post_processor_value, rel_err[i]);
+          break;
+        case operation::average:
+          post_processor_value += rel_err[i];
+          num_values++;
           break;
         default:
           mooseError("Unhandled OperationEnum!");
@@ -123,7 +137,10 @@ TallyRelativeError::getValue() const
     }
   }
 
-  return extreme_value;
+  if (_type == operation::average)
+    post_processor_value /= num_values;
+
+  return post_processor_value;
 }
 
 #endif

@@ -42,23 +42,23 @@
 [Functions]
   [temp_ansol]
     type = ParsedFunction
-    value = (sin(x)*sin(y)*sin(z))+5
+    expression = (sin(x)*sin(y)*sin(z))+5
   []
   [source_fn]
     type = ParsedFunction
-    value = 3*sin(x)*sin(y)*sin(z)
+    expression = 3*sin(x)*sin(y)*sin(z)
   []
   [fn_1]
     type = ParsedFunction
-    value = t*x*z*(2-z)*0.1
+    expression = t*x*z*(2-z)*0.1
   []
   [fn_2]
     type = ParsedFunction
-    value = t*x*z*(2-z)*0.05
+    expression = t*x*z*(2-z)*0.05
   []
   [fn_3]
     type = ParsedFunction
-    value = t*(y+1)*(y-1)*0.1
+    expression = t*(y+1)*(y-1)*0.1
   []
 []
 
@@ -115,7 +115,7 @@
   [difference]
     type = ParsedAux
     variable = difference
-    function = 'temp - temp_ansol'
+    expression = 'temp - temp_ansol'
     coupled_variables = 'temp temp_ansol'
   []
 []
@@ -152,7 +152,6 @@
 [MultiApps]
   [nek]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'nek.i'
     execute_on = timestep_end
     sub_cycling = true
@@ -165,6 +164,7 @@
      source_variable = source_auxvar
      to_multi_app = nek
      variable = heat_source
+    search_value_conflicts = false
    []
    [source_integral_to_nek]
      type = MultiAppPostprocessorTransfer
@@ -177,18 +177,21 @@
      source_variable = disp_x_o
      to_multi_app = nek
      variable = disp_x
+    search_value_conflicts = false
    []
    [disp_y_to_nek]
      type = MultiAppGeneralFieldNearestLocationTransfer
      source_variable = disp_y_o
      to_multi_app = nek
      variable = disp_y
+    search_value_conflicts = false
    []
    [disp_z_to_nek]
      type = MultiAppGeneralFieldNearestLocationTransfer
      source_variable = disp_z_o
      to_multi_app = nek
      variable = disp_z
+    search_value_conflicts = false
    []
 []
 

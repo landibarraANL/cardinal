@@ -37,7 +37,6 @@ dT = 50.0
 [Problem]
   type = OpenMCCellAverageProblem
   verbose = true
-  tally_type = cell
 
   temperature_blocks = '1 2'
   density_blocks = '1 2'
@@ -45,6 +44,13 @@ dT = 50.0
   power = 100.0
 
   skinner = moab
+
+  [Tallies]
+    [Mesh]
+      type = CellTally
+      blocks = '1 2'
+    []
+  []
 []
 
 [UserObjects]
@@ -78,5 +84,5 @@ dT = 50.0
 
 [Outputs]
   exodus = true
-  hide = 'temp density'
+  hide = 'temp density cell_instance cell_id'
 []

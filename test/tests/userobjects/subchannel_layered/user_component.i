@@ -33,7 +33,7 @@
   [velocity_component] # actual velocity component computed directly from interpolated nekRS velocity fields
     type = ParsedAux
     variable = velocity_component
-    function = '(0.1*vel_x-0.2*vel_y+0.3*vel_z)/sqrt(0.1*0.1+0.2*0.2+0.3*0.3)'
+    expression = '(0.1*vel_x-0.2*vel_y+0.3*vel_z)/sqrt(0.1*0.1+0.2*0.2+0.3*0.3)'
     coupled_variables = 'vel_x vel_y vel_z'
     execute_on = 'timestep_end nonlinear linear'
   []
@@ -82,7 +82,6 @@
 [MultiApps]
   [subchannel]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'subchannel_b.i'
     execute_on = timestep_end
   []
@@ -100,24 +99,28 @@
     source_variable = uo_x
     to_multi_app = subchannel
     variable = uo_x
+    search_value_conflicts = false
   []
   [uoy_to_sub]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = uo_y
     to_multi_app = subchannel
     variable = uo_y
+    search_value_conflicts = false
   []
   [uoz_to_sub]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = uo_z
     to_multi_app = subchannel
     variable = uo_z
+    search_value_conflicts = false
   []
   [analytic_to_sub]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = velocity_component
     to_multi_app = subchannel
     variable = velocity_component
+    search_value_conflicts = false
   []
 []
 

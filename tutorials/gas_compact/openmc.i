@@ -42,22 +42,27 @@ mdot = 0.011                             # fluid mass flowrate (kg/s)
 
 [Problem]
   type = OpenMCCellAverageProblem
-  output = 'unrelaxed_tally_std_dev'
-  check_equal_mapped_tally_volumes = true
 
   power = ${power}
   scaling = 100.0
   temperature_blocks = 'graphite compacts compacts_trimmer_tri'
-  tally_blocks = 'compacts compacts_trimmer_tri'
-  tally_type = cell
-  tally_name = heat_source
+
   cell_level = 1
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      name = heat_source
+      blocks = 'compacts compacts_trimmer_tri'
+      check_equal_mapped_tally_volumes = true
+      output = 'unrelaxed_tally_std_dev'
+    []
+  []
 []
 
 [MultiApps]
   [solid]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'solid.i'
     execute_on = timestep_end
   []
@@ -65,7 +70,7 @@ mdot = 0.011                             # fluid mass flowrate (kg/s)
 
 [Transfers]
   [heat_source_to_solid]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     to_multi_app = solid
     variable = power
     source_variable = heat_source
@@ -73,7 +78,7 @@ mdot = 0.011                             # fluid mass flowrate (kg/s)
     to_postprocessors_to_be_preserved = power
   []
   [temperature_to_openmc]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     from_multi_app = solid
     variable = temp
     source_variable = T

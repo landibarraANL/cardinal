@@ -19,6 +19,9 @@
 #pragma once
 
 #include "MooseApp.h"
+#include "VariadicTable.h"
+#include "AuxiliarySystem.h"
+#include "UserErrorChecking.h"
 
 class CardinalApp : public MooseApp
 {
@@ -30,4 +33,6 @@ public:
   static void registerApps();
   static void registerAll(Factory & f, ActionFactory & af, Syntax & s);
   static void associateSyntaxInner(Syntax & syntax, ActionFactory & action_factory);
+
+  virtual std::string getInstallableInputs() const override;
 };

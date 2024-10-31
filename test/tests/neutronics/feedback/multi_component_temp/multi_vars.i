@@ -29,21 +29,21 @@
     variable = cell_temp
   []
   [collated_solid_temp]
-    type = SelfAux
+    type = ProjectionAux
     variable = collated_temp
     v = solid_temp
     block = '1 3'
     execute_on = timestep_begin
   []
   [collated_fluid_temp]
-    type = SelfAux
+    type = ProjectionAux
     variable = collated_temp
     v = fluid_temp
     block = '2'
     execute_on = timestep_begin
   []
   [collated_other_temp]
-    type = SelfAux
+    type = ProjectionAux
     variable = collated_temp
     v = other_temp
     block = '10'
@@ -72,13 +72,18 @@
 [Problem]
   type = OpenMCCellAverageProblem
   power = 500.0
-  tally_blocks = '1 3 2 10'
-  tally_type = cell
   cell_level = 0
   verbose = true
 
   temperature_variables = 'solid_temp; fluid_temp; other_temp'
   temperature_blocks = '1 3; 2; 10'
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '1 3 2 10'
+    []
+  []
 []
 
 [Executioner]

@@ -3,20 +3,6 @@
   file = ../../meshes/pincell.e
 []
 
-[AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-[]
-
-[AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-[]
-
 [Problem]
   type = OpenMCCellAverageProblem
   power = 500.0
@@ -26,13 +12,18 @@
 
   cell_level = 1
 
-  tally_type = cell
-  tally_blocks = '1 2 3'
   check_tally_sum = false
-  tally_score = heating
-  tally_name = heat_source
 
   initial_properties = xml
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '1 2 3'
+      score = heating
+      name = heat_source
+    []
+  []
 []
 
 [Executioner]

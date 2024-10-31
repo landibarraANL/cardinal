@@ -19,10 +19,8 @@
 #ifdef ENABLE_OPENMC_COUPLING
 
 #include "OpenMCProblemBase.h"
-#include "NonlinearSystem.h"
-#include "AuxiliarySystem.h"
-#include "UserErrorChecking.h"
 #include "CardinalAppTypes.h"
+#include "AddTallyAction.h"
 
 InputParameters
 OpenMCProblemBase::validParams()
@@ -34,8 +32,7 @@ OpenMCProblemBase::validParams()
       "source_strength", "Neutrons/second to normalize the OpenMC tallies; only used for fixed source mode");
   params.addParam<bool>("verbose", false, "Whether to print diagnostic information");
 
-  params.addRequiredParam<MooseEnum>(
-      "tally_type", getTallyTypeEnum(), "Type of tally to use in OpenMC");
+  params.addParam<MooseEnum>("tally_type", getTallyTypeEnum(), "Type of tally to use in OpenMC");
 
   params.addRangeCheckedParam<Real>(
       "scaling",
@@ -48,7 +45,9 @@ OpenMCProblemBase::validParams()
   params.addRangeCheckedParam<unsigned int>(
       "openmc_verbosity",
       "openmc_verbosity >= 1 & openmc_verbosity <= 10",
-      "OpenMC verbosity level; this overrides the setting in the XML files");
+      "OpenMC verbosity level; this overrides the setting in the XML files. Note that we cannot "
+      "influence the verbosity of OpenMC's initialization routines, since these are run before "
+      "Cardinal is initialized.");
   params.addRangeCheckedParam<unsigned int>(
       "inactive_batches",
       "inactive_batches >= 0",
@@ -66,6 +65,11 @@ OpenMCProblemBase::validParams()
                         false,
                         "Whether to take the initial fission source "
                         "for interation n to be the converged source bank from iteration n-1");
+  params.addParam<bool>(
+      "skip_statepoint",
+      false,
+      "Whether to skip writing any statepoint files from OpenMC; this is a performance "
+      "optimization for scenarios where you may not want the statepoint files anyways");
   return params;
 }
 
@@ -73,13 +77,17 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
   : CardinalProblem(params),
     PostprocessorInterface(this),
     _verbose(getParam<bool>("verbose")),
-    _tally_type(getParam<MooseEnum>("tally_type").getEnum<tally::TallyTypeEnum>()),
     _reuse_source(getParam<bool>("reuse_source")),
     _specified_scaling(params.isParamSetByUser("scaling")),
     _scaling(getParam<Real>("scaling")),
+    _skip_statepoint(getParam<bool>("skip_statepoint")),
     _fixed_point_iteration(-1),
     _total_n_particles(0)
 {
+  if (isParamValid("tally_type"))
+    mooseError("The tally system used by OpenMCProblemBase derived classes has been deprecated. "
+               "Please add tallies with the [Tallies] block instead.");
+
   int argc = 1;
   char openmc[] = "openmc";
   char * argv[1] = {openmc};
@@ -97,31 +105,33 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
 
   // ensure that unsupported run modes are not used, while also checking for
   // necessary/unused input parameters for the valid run modes
-  auto run_mode = openmc::settings::run_mode;
-  switch (run_mode)
+  _run_mode = openmc::settings::run_mode;
+  const auto & tally_actions = getMooseApp().actionWarehouse().getActions<AddTallyAction>();
+  switch (_run_mode)
   {
     case openmc::RunMode::EIGENVALUE:
     {
-      if (_tally_type != tally::none)
+      // Jumping through hoops to see if we're going to add tallies down the line.
+      if (tally_actions.size() > 0)
       {
         checkRequiredParam(params, "power", "running in k-eigenvalue mode");
         _power = &getPostprocessorValue("power");
       }
       else
-        checkUnusedParam(params, "power", "'tally_type = none'");
+        checkUnusedParam(params, "power", "no tallies have been added");
 
       checkUnusedParam(params, "source_strength", "running in k-eigenvalue mode");
       break;
     }
     case openmc::RunMode::FIXED_SOURCE:
     {
-      if (_tally_type != tally::none)
+      if (tally_actions.size() > 0)
       {
         checkRequiredParam(params, "source_strength", "running in fixed source mode");
         _source_strength = &getPostprocessorValue("source_strength");
       }
       else
-        checkUnusedParam(params, "source_strength", "'tally_type = none'");
+        checkUnusedParam(params, "source_strength", "no tallies have been added");
 
       checkUnusedParam(params, "inactive_batches", "running in fixed source mode");
       checkUnusedParam(params, "reuse_source", "running in fixed source mode");
@@ -130,22 +140,16 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
       break;
     }
     case openmc::RunMode::PLOTTING:
-      mooseError("Running OpenMC in plotting mode is not supported through Cardinal!\n"
-        "Please just run using the OpenMC executable, like 'openmc --plot'");
     case openmc::RunMode::PARTICLE:
-      mooseError("Running OpenMC in particle restart mode is not supported through Cardinal!\n"
-       "Please just run using the OpenMC executable, like 'openmc --restart <binary_file>'");
     case openmc::RunMode::VOLUME:
-      mooseError("Running OpenMC in volume calculation mode is not supported through Cardinal!\n"
-        "Please just run using the OpenMC executable, like 'openmc --volume'");
+      mooseError("Running OpenMC in plotting, particle, and volume modes is not supported through "
+                 "Cardinal! Please just run using the OpenMC executable (e.g., openmc --plot for "
+                 "plot mode).");
     default:
       mooseError("Unhandled openmc::RunMode enum in OpenMCInitAction!");
   }
 
-  _single_coord_level = openmc::model::n_coord_levels == 1;
-  _path_output = openmc::settings::path_output;
   _n_cell_digits = std::to_string(openmc::model::cells.size()).length();
-  _run_mode = openmc::settings::run_mode;
 
   if (openmc::settings::libmesh_comm)
     mooseWarning("libMesh communicator already set in OpenMC.");
@@ -154,12 +158,12 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
 
   if (openmc::settings::temperature_range[1] == 0.0)
     mooseWarning(
-      "For multiphysics simulations, we recommend setting the 'temperature_range' in OpenMC's\n"
-      "settings.xml file. This will pre-load nuclear data over a range of temperatures, instead\n"
-      "of only the temperatures defined in the XML file.\n\n"
-      "For efficiency purposes, OpenMC only checks that cell temperatures are within the global\n"
-      "min/max of loaded data, which can be different from data loaded for each nuclide. Run may\n"
-      "abort suddenly if requested nuclear data is not available.");
+        "For multiphysics simulations, we recommend setting the 'temperature_range' in OpenMC's "
+        "settings.xml file. This will pre-load nuclear data over a range of temperatures, instead "
+        "of only the temperatures defined in the XML file.\n\n"
+        "For efficiency purposes, OpenMC only checks that cell temperatures are within the global "
+        "min/max of loaded data, which can be different from data loaded for each nuclide. Run may "
+        "abort suddenly if requested nuclear data is not available.");
 
   if (isParamValid("openmc_verbosity"))
     openmc::settings::verbosity = getParam<unsigned int>("openmc_verbosity");
@@ -371,6 +375,13 @@ OpenMCProblemBase::isLocalElem(const Elem * elem) const
   return false;
 }
 
+bool
+OpenMCProblemBase::cellHasZeroInstances(const cellInfo & cell_info) const
+{
+  auto n = openmc::model::cells.at(cell_info.first)->n_instances_;
+  return !n;
+}
+
 void
 OpenMCProblemBase::setCellTemperature(const int32_t & index,
                                       const int32_t & instance,
@@ -382,14 +393,18 @@ OpenMCProblemBase::setCellTemperature(const int32_t & index,
   {
     std::string descriptor =
         "set cell " + printCell(cell_info) + " to temperature " + Moose::stringify(T) + " (K)";
-    mooseError(
-        "In attempting to ",
-        descriptor,
-        ", OpenMC reported:\n\n",
-        std::string(openmc_err_msg) + "\n\n" +
-            "If you are trying to debug a model setup, you can set 'initial_properties = xml' to\n"
-            "use the initial temperature and density in the OpenMC XML files for OpenMC's first "
-            "run");
+
+    // special error message if cell has zero instances
+    if (cellHasZeroInstances(cell_info))
+      mooseError("Failed to set the temperature for cell " + printCell(cell_info) +
+                 " with zero instances.");
+
+    mooseError("In attempting to set cell " + printCell(cell_info) + " to temperature " +
+                   Moose::stringify(T) + " (K), OpenMC reported:\n\n",
+               std::string(openmc_err_msg) + "\n\n" +
+                   "If you are trying to debug a model setup, you can set 'initial_properties = "
+                   "xml' to use the initial temperature and density in the OpenMC XML files for "
+                   "OpenMC's first run.");
   }
 }
 
@@ -434,7 +449,7 @@ OpenMCProblemBase::setCellDensity(const Real & density, const cellInfo & cell_in
   // because it could be a very common mistake to forget to set an initial condition
   // for density if OpenMC runs first
   if (density <= 0.0)
-    mooseError("Densities less than or equal to zero cannot be set in the OpenMC model!\n cell " +
+    mooseError("Densities less than or equal to zero cannot be set in the OpenMC model!\n\n cell " +
                printCell(cell_info) + " set to density " + Moose::stringify(density) + " (kg/m3)");
 
   int32_t material_index;
@@ -457,16 +472,17 @@ OpenMCProblemBase::setCellDensity(const Real & density, const cellInfo & cell_in
 
   if (err)
   {
-    std::string descriptor = "set material with index " + Moose::stringify(material_index) +
-                             " to density " + Moose::stringify(density) + " (kg/m3)";
-    mooseError(
-        "In attempting to ",
-        descriptor,
-        ", OpenMC reported:\n\n",
-        std::string(openmc_err_msg) + "\n\n" +
-            "If you are trying to debug a model setup, you can set 'initial_properties = xml' to\n"
-            "use the initial temperature and density in the OpenMC XML files for OpenMC's first "
-            "run");
+    // special error message if cell has zero instances
+    if (cellHasZeroInstances(cell_info))
+      mooseError("Failed to set the density for cell " + printCell(cell_info) +
+                 " with zero instances.");
+
+    mooseError("In attempting to set cell " + printCell(cell_info) + " to density " +
+                   Moose::stringify(density) + " (kg/m3), OpenMC reported:\n\n",
+               std::string(openmc_err_msg) + "\n\n" +
+                   "If you are trying to debug a model setup, you can set 'initial_properties = "
+                   "xml' to use the initial temperature and density in the OpenMC XML files for "
+                   "OpenMC's first run.");
   }
 }
 
@@ -544,17 +560,32 @@ OpenMCProblemBase::tallyMeanAcrossBins(std::vector<openmc::Tally *> tally, const
 }
 
 std::string
-OpenMCProblemBase::tallyScore(const std::string & score) const
+OpenMCProblemBase::enumToTallyScore(const std::string & score) const
 {
+  // the MultiMooseEnum is all caps, but the MooseEnum is already the correct case,
+  // so we need to treat these as separate
   std::string s = score;
-  std::transform(s.begin(), s.end(), s.begin(),
-    [](unsigned char c){ return std::tolower(c); });
+  if (std::all_of(
+          s.begin(), s.end(), [](unsigned char c) { return !std::isalpha(c) || std::isupper(c); }))
+  {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
 
-  // we need to revert back to some letters being uppercase for certain scores
-  if (s == "h3_production")
-    s = "H3_production";
+    // we need to revert back to some letters being uppercase for certain scores
+    if (s == "h3_production")
+      s = "H3_production";
+  }
 
+  // MOOSE enums use underscores, OpenMC uses dashes
   std::replace(s.begin(), s.end(), '_', '-');
+  return s;
+}
+
+std::string
+OpenMCProblemBase::tallyScoreToEnum(const std::string & score) const
+{
+  // MOOSE enums use underscores, OpenMC uses dashes
+  std::string s = score;
+  std::replace(s.begin(), s.end(), '-', '_');
   return s;
 }
 
@@ -574,6 +605,37 @@ OpenMCProblemBase::tallyEstimator(tally::TallyEstimatorEnum estimator) const
   }
 }
 
+std::string
+OpenMCProblemBase::estimatorToString(openmc::TallyEstimator estimator) const
+{
+  switch (estimator)
+  {
+    case openmc::TallyEstimator::TRACKLENGTH:
+      return "tracklength";
+    case openmc::TallyEstimator::COLLISION:
+      return "collision";
+    case openmc::TallyEstimator::ANALOG:
+      return "analog";
+    default:
+      mooseError("Unhandled TallyEstimatorEnum!");
+  }
+}
+
+openmc::TriggerMetric
+OpenMCProblemBase::triggerMetric(std::string trigger) const
+{
+  if (trigger == "variance")
+    return openmc::TriggerMetric::variance;
+  else if (trigger == "std_dev")
+    return openmc::TriggerMetric::standard_deviation;
+  else if (trigger == "rel_err")
+    return openmc::TriggerMetric::relative_error;
+  else if (trigger == "none")
+    return openmc::TriggerMetric::not_active;
+  else
+    mooseError("Unhandled TallyTriggerTypeEnum: ", trigger);
+}
+
 openmc::TriggerMetric
 OpenMCProblemBase::triggerMetric(trigger::TallyTriggerTypeEnum trigger) const
 {
@@ -590,32 +652,6 @@ OpenMCProblemBase::triggerMetric(trigger::TallyTriggerTypeEnum trigger) const
     default:
       mooseError("Unhandled TallyTriggerTypeEnum!");
   }
-}
-
-openmc::Filter *
-OpenMCProblemBase::cellInstanceFilter(const std::vector<cellInfo> & tally_cells) const
-{
-  auto cell_filter =
-      dynamic_cast<openmc::CellInstanceFilter *>(openmc::Filter::create("cellinstance"));
-
-  std::vector<openmc::CellInstance> cells;
-  for (const auto & c : tally_cells)
-    cells.push_back(
-        {gsl::narrow_cast<gsl::index>(c.first), gsl::narrow_cast<gsl::index>(c.second)});
-
-  cell_filter->set_cell_instances(cells);
-  return cell_filter;
-}
-
-openmc::Tally *
-OpenMCProblemBase::addTally(const std::vector<std::string> & score,
-  std::vector<openmc::Filter *> & filters, const openmc::TallyEstimator & estimator)
-{
-  auto tally = openmc::Tally::create();
-  tally->set_scores(score);
-  tally->estimator_ = estimator;
-  tally->set_filters(filters);
-  return tally;
 }
 
 bool
@@ -646,21 +682,6 @@ OpenMCProblemBase::geometryType(bool & has_csg_universe, bool & has_dag_universe
   }
 }
 
-std::unique_ptr<openmc::LibMesh>
-OpenMCProblemBase::tallyMesh(const std::string * filename) const
-{
-  std::unique_ptr<openmc::LibMesh> mesh;
-  if (!filename)
-    mesh = std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _scaling);
-  else
-    mesh = std::make_unique<openmc::LibMesh>(*filename, _scaling);
-
-  // by setting the ID to -1, OpenMC will automatically detect the next available ID
-  mesh->set_id(-1);
-  mesh->output_ = false;
-  return mesh;
-}
-
 long unsigned int
 OpenMCProblemBase::numCells() const
 {
@@ -672,10 +693,22 @@ OpenMCProblemBase::numCells() const
 }
 
 bool
+OpenMCProblemBase::isReactionRateScore(const std::string & score) const
+{
+  const std::set<std::string> viable_scores = {
+      "H3-production", "total", "absorption", "scatter", "fission"};
+  return viable_scores.count(score);
+}
+
+bool
 OpenMCProblemBase::isHeatingScore(const std::string & score) const
 {
-  std::set<std::string> viable_scores = {"heating", "heating-local", "kappa-fission",
-    "fission-q-prompt", "fission-q-recoverable", "damage-energy"};
+  const std::set<std::string> viable_scores = {"heating",
+                                               "heating-local",
+                                               "kappa-fission",
+                                               "fission-q-prompt",
+                                               "fission-q-recoverable",
+                                               "damage-energy"};
   return viable_scores.count(score);
 }
 
@@ -704,7 +737,7 @@ OpenMCProblemBase::subdomainName(const SubdomainID & id) const
 }
 
 void
-OpenMCProblemBase::getOpenMCNuclideDensitiesUserObjects()
+OpenMCProblemBase::getOpenMCUserObjects()
 {
   TheWarehouse::Query uo_query = theWarehouse().query().condition<AttribSystem>("UserObject");
   std::vector<UserObject *> userobjs;
@@ -715,6 +748,10 @@ OpenMCProblemBase::getOpenMCNuclideDensitiesUserObjects()
     OpenMCNuclideDensities * c = dynamic_cast<OpenMCNuclideDensities *>(u);
     if (c)
       _nuclide_densities_uos.push_back(c);
+
+    OpenMCTallyNuclides * d = dynamic_cast<OpenMCTallyNuclides *>(u);
+    if (d)
+      _tally_nuclides_uos.push_back(d);
   }
 }
 
@@ -729,6 +766,21 @@ OpenMCProblemBase::sendNuclideDensitiesToOpenMC()
 
   _console << "Sending nuclide compositions to OpenMC... ";
   for (const auto & uo : _nuclide_densities_uos)
+    uo->setValue();
+  _console << "done" << std::endl;
+}
+
+void
+OpenMCProblemBase::sendTallyNuclidesToOpenMC()
+{
+  if (_tally_nuclides_uos.size() == 0)
+    return;
+
+  // We could probably put this somewhere better, but it's good for now
+  executeControls(EXEC_SEND_OPENMC_TALLY_NUCLIDES);
+
+  _console << "Sending tally nuclides to OpenMC... ";
+  for (const auto & uo : _tally_nuclides_uos)
     uo->setValue();
   _console << "done" << std::endl;
 }

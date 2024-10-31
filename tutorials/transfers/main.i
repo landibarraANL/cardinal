@@ -31,7 +31,6 @@
 [MultiApps]
   [sub]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'sub.i'
     execute_on = timestep_end
   []
@@ -45,7 +44,7 @@
     to_multi_app = sub
   []
   [mesh_function]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = u
     variable = u_mesh_function
     to_multi_app = sub

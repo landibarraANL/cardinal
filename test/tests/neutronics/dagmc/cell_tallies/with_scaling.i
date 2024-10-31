@@ -8,10 +8,6 @@ scale = 100.0
 []
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [cell_temperature]
     family = MONOMIAL
     order = CONSTANT
@@ -19,10 +15,6 @@ scale = 100.0
 []
 
 [AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
   [cell_temperature]
     type = CellTemperatureAux
     variable = cell_temperature
@@ -48,8 +40,6 @@ scale = 100.0
 [Problem]
   type = OpenMCCellAverageProblem
   verbose = true
-  tally_type = cell
-  tally_blocks = '1 2'
   scaling = ${scale}
 
   temperature_blocks = '1 2'
@@ -57,6 +47,13 @@ scale = 100.0
   power = 16.0
 
   skinner = moab
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '1 2'
+    []
+  []
 []
 
 [UserObjects]

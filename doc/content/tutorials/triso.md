@@ -13,12 +13,6 @@ To access this tutorial,
 cd cardinal/tutorials/pebbles
 ```
 
-!alert! note title=Computing Needs
-No special computing needs are required for this tutorial.
-For testing purposes, you may choose to decrease the number of particles to
-solve faster.
-!alert-end!
-
 ## Geometry and Computational Models
 
 The geometry and
@@ -64,7 +58,7 @@ q^{''}=h\left(T-T_\infty\right)
 
 where $h=1000$ W/m$^2$/K and $T_\infty$ is set to a function linearly ranging
 from 650&deg;C at $z=0$ cm to 750&deg;C at $z=10$ cm. In this example, the MOOSE
-heat conduction module will be run first. The initial solid temperature is set to
+heat transfer module will be run first. The initial solid temperature is set to
 650&deg;C and the heat source to zero.
 
 ### OpenMC Model
@@ -108,7 +102,7 @@ and the FLiBe region is represented as:
 - Cell ID 2, instance 1
 - Cell ID 2, instance 2
 
-Because OpenMC runs after the MOOSE heat conduction module, initial conditions are
+Because OpenMC runs after the MOOSE heat transfer module, initial conditions are
 only required for the FLiBe temperature, which is set to 650&deg;C. Because there is
 no density feedback in this example, the densities initially imposed in the OpenMC
 model remain fixed at the values set in the OpenMC input files.
@@ -127,7 +121,7 @@ The following sub-sections describe these files.
 
 ### Solid Input Files
 
-The solid phase is solved with the MOOSE heat conduction module, and is described in the
+The solid phase is solved with the MOOSE heat transfer module, and is described in the
 `solid.i` input. We set up the mesh using the [CombinerGenerator](https://mooseframework.inl.gov/source/meshgenerators/CombinerGenerator.html) to translate a single sphere mesh to multiple locations.
 
 !listing /tutorials/pebbles/solid.i
@@ -173,19 +167,21 @@ then a point $(0, 0, 0.02)$ m in `solid.i` would get mapped to the node closest 
 $(0, 0, 0.02)$ cm in `openmc.i` (when we actually want the point to map to
 $(0, 0, 2)$ cm).
 
-Next, we define auxiliary variables that will help us visualize the cell IDs
-([CellIDAux](/auxkernels/CellIDAux.md)),
-cell instances ([CellInstanceAux](/auxkernels/CellInstanceAux.md)),
-and cell temperatures ([CellTemperatureAux](/auxkernels/CellTemperatureAux.md))
+Cardinal will also automatically output a variable named `cell_id`
+([CellIDAux](https://cardinal.cels.anl.gov/source/auxkernels/CellIDAux.html))
+and a variable named `cell_instance` (
+[CellInstanceAux](https://cardinal.cels.anl.gov/source/auxkernels/CellInstanceAux.html)) to show the spatial mapping.
+We also define a [CellTemperatureAux](/auxkernels/CellTemperatureAux.md)
+to show the OpenMC volume-averaged temperatures
 as they map to the `[Mesh]`.
 
 !listing /tutorials/pebbles/openmc.i
   start=AuxVariables
   end=Problem
 
-The `[Problem]`
-block is then used to specify the OpenMC wrapping. We define a total power of
-1500 W, and indicate that we'd like to add tallies on block 0, which corresponds to the pebbles.
+The `[Problem]` and `[Tallies]`
+blocks are then used to specify the OpenMC wrapping. We define a total power of
+1500 W, and indicate that we'd like to add a [CellTally](/tallies/CellTally.md) on block 0, which corresponds to the pebbles.
 The cell tally setup in Cardinal will then automatically add a tally for each unique
 cell ID+instance combination.
 Because the repeated pebble cells we'd like to tally
@@ -291,7 +287,7 @@ application. To do this, we increase `nr` to add more radial discretization.
   block=Mesh
 
 For the OpenMC wrapping, the only changes required are
-that we set the type of tally to `mesh`, provide a mesh template with the mesh, and specify the
+that we change the added tally to a [MeshTally](/tallies/MeshTally.md), provide a mesh template with the mesh, and specify the
 translations to apply to replicate the mesh at the desired end positions in OpenMC's domain.
 For the mesh tally, let's create a mesh for a single pebble using MOOSE's mesh generators. We simply
 need to run the `mesh.i` file in `--mesh-only` mode:
@@ -303,7 +299,7 @@ cardinal-opt -i mesh.i --mesh-only
 ```
 
 which will create a mesh file named `mesh_in.e`. We then list that mesh as the
-`mesh_template` in the `[Problem]` block.
+`mesh_template` in the `[Tallies]` block.
 
 !listing /tutorials/pebbles/openmc_um.i
   block=Problem

@@ -19,17 +19,11 @@ an OpenMC XML file from Box. Please download the files from the
 and place these files within the same directory structure
 in `tutorials/gas_assembly`.
 
-!alert! note title=Computing Needs
-No special computing needs are required for this tutorial.
-For testing purposes, you may choose to decrease the number of particles to
-solve faster, or decrease the resolution of the solid mesh.
-!alert-end!
-
-In this tutorial, we couple OpenMC to the MOOSE heat conduction module
+In this tutorial, we couple OpenMC to the MOOSE heat transfer module
 and the [Thermal Hydraulics Module (THM)](https://mooseframework.inl.gov/modules/thermal_hydraulics/index.html)
 , a set of 1-D systems-level thermal-hydraulics kernels.
 OpenMC will receive temperature feedback from both
-the MOOSE heat conduction module (for the solid regions) and from THM
+the MOOSE heat transfer module (for the solid regions) and from THM
 (for the fluid regions). Density feedback will be provided by THM
 for the fluid regions.
 This tutorial models a full-height [!ac](TRISO)-fueled prismatic gas reactor
@@ -209,7 +203,7 @@ OpenMC receives on each axial plane a total of 721 temperatures and 108 densitie
 210\underbrace{\text{ fuel compacts}}_{\substack{\textup{1 TRISO compact (\textit{rainbow})}\\\textup{1 matrix region (\textit{purple})}}}\ \ +\ \ \ 108\underbrace{\text{ coolant channels}}_{\substack{\textup{1 coolant region (\textit{various})}\\\textup{1 matrix region (\textit{various})}}}\ \ +\ \ \ 6\underbrace{\text{ poison compacts}}_{\substack{\textup{1 poison region (\textit{brown})}\\\textup{1 matrix region (\textit{blue})}}}\ \ +\ \ \ 73\underbrace{\text{ graphite fillers}}_\text{1 matrix region (\textit{mustard})}
 \end{equation*}
 
-The solid temperature is provided by the MOOSE heat conduction module,
+The solid temperature is provided by the MOOSE heat transfer module,
 while the fluid temperature and density are provided by [!ac](THM).
 Because we will run OpenMC second, the initial fluid temperature is
 set to the same initial condition that is imposed in the MOOSE solid model.
@@ -254,7 +248,7 @@ A summary of the data transfers between the three applications is shown in
 
 ### Solid Input Files
 
-The solid phase is solved with the MOOSE heat conduction module, and is described
+The solid phase is solved with the MOOSE heat transfer module, and is described
 in the `solid.i` input. We define a number of constants at the beginning of the file
 and set up the mesh from a file.
 
@@ -268,12 +262,12 @@ and boundary conditions we will apply.
   start=Variables
   end=Functions
 
-The MOOSE heat conduction module will receive power from OpenMC in the form of an
+The MOOSE heat transfer module will receive power from OpenMC in the form of an
 [AuxVariable](https://mooseframework.inl.gov/syntax/AuxVariables/index.html),
 so we define a receiver variable for the fission power, as `power`. The MOOSE heat
 conduction module will also receive a fluid wall temperature from [!ac](THM)
 as another [AuxVariable](https://mooseframework.inl.gov/syntax/AuxVariables/index.html)
-which we name `thm_temp`. Finally, the MOOSE heat conduction module will send the heat
+which we name `thm_temp`. Finally, the MOOSE heat transfer module will send the heat
 flux to [!ac](THM), so we add a variable named `flux` that we will use to compute
 the heat flux using the [DiffusionFluxAux](https://mooseframework.inl.gov/source/auxkernels/DiffusionFluxAux.html)
 auxiliary kernel.
@@ -357,7 +351,7 @@ is not always used to represent quantities traditionally thought of as "material
   block=Materials
 
 [!ac](THM) computes the wall temperature to apply a boundary condition in
-the MOOSE heat conduction module. To convert the `T_wall` material into an auxiliary
+the MOOSE heat transfer module. To convert the `T_wall` material into an auxiliary
 variable, we use the [ADMaterialRealAux](https://mooseframework.inl.gov/source/auxkernels/MaterialRealAux.html).
 
 !listing /tutorials/gas_assembly/thm.i
@@ -423,9 +417,11 @@ we use a [CellTemperatureAux](/auxkernels/CellTemperatureAux.md) to view
 the temperature set in each OpenMC cell and a [CellDensityAux](/auxkernels/CellDensityAux.md)
 to view the density set in each fluid OpenMC cell. To understand how the OpenMC
 model maps to the `[Mesh]`, we also include
-[CellMaterialIDAux](/auxkernels/CellMaterialIDAux.md),
-[CellIDAux](/auxkernels/CellIDAux.md), and
-[CellInstanceAux](/auxkernels/CellInstanceAux.md) auxiliary kernels.
+[CellMaterialIDAux](/auxkernels/CellMaterialIDAux.md).
+Cardinal will also automatically output a variable named `cell_id`
+([CellIDAux](https://cardinal.cels.anl.gov/source/auxkernels/CellIDAux.html))
+and a variable named `cell_instance` (
+[CellInstanceAux](https://cardinal.cels.anl.gov/source/auxkernels/CellInstanceAux.html)) to show the spatial mapping.
 Next, we add a receiver
 `flux` variable that will hold the heat flux received from MOOSE (and sent
 to [!ac](THM)) and another receiver variable `thm_temp_wall` that will hold
@@ -449,10 +445,10 @@ conduction module and to [!ac](THM) occur, these initial conditions will be pass
   start=ICs
   end=FluidProperties
 
-The `[Problem]` block is then used to specify settings for the OpenMC wrapping. We
+The `[Problem]` and `[Tallies]` blocks are then used to specify settings for the OpenMC wrapping. We
 define the total power for normalization, indicate that blocks 1, 2, and 4 are solid
-(graphite, compacts, and poison) while block 101 is fluid. We automatically add
-tallies to block 2, the fuel compacts. Because OpenMC solves in units of centimeters,
+(graphite, compacts, and poison) while block 101 is fluid. We add a [CellTally](/tallies/CellTally.md)
+to block 2, the fuel compacts. Because OpenMC solves in units of centimeters,
 we specify a `scaling` of 100, i.e. a multiplicative factor to apply to the
 `[Mesh]` to get into OpenMC's centimeter units.
 
@@ -463,7 +459,7 @@ Other features we use include an output of the fission tally standard deviation
 in units of W/m$^3$ to the `[Mesh]` by setting `output = 'unrelaxed_tally_std_dev'`.
 This is used to obtain uncertainty estimates of the heat source distribution from OpenMC
 in the same units as the heat source. We also leverage a helper utility
-in Cardinal by setting `check_equal_mapped_tally_volumes = true`. This parameter will
+in [CellTally](/tallies/CellTally.md) by setting `check_equal_mapped_tally_volumes = true`. This parameter will
 throw an error if the tallied OpenMC cells map to different volumes in the MOOSE domain.
 Because we know *a priori* that the equal-volume OpenMC tally cells *should* all map
 to equal volumes, this will help ensure that the volumes used for heat source normalization

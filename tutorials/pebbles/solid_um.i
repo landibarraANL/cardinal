@@ -74,7 +74,6 @@ T_fluid = ${fparse 650.0 + 273.15}
 [MultiApps]
   [openmc]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'openmc_um.i'
     execute_on = timestep_end
   []
@@ -90,7 +89,7 @@ T_fluid = ${fparse 650.0 + 273.15}
     to_postprocessors_to_be_preserved = source_integral
   []
   [temp_to_openmc]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     to_multi_app = openmc
     variable = temp
     source_variable = temp

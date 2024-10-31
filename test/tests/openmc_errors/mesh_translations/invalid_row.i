@@ -16,21 +16,17 @@
 
 [Problem]
   type = OpenMCCellAverageProblem
-  temperature_blocks = '1'
-  cell_level = 0
-  mesh_translations_file = pebble_centers.txt
-
-  tally_type = mesh
-  mesh_template = '../neutronics/meshes/sphere.e'
   power = 100.0
+
+  [Tallies]
+    [Mesh]
+      type = MeshTally
+      mesh_template = '../neutronics/meshes/sphere.e'
+      mesh_translations_file = pebble_centers.txt
+    []
+  []
 []
 
 [Executioner]
   type = Transient
-  num_steps = 1
-[]
-
-[Outputs]
-  exodus = true
-  hide = 'temp'
 []

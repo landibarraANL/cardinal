@@ -48,7 +48,7 @@
   []
 []
 
-[Modules/TensorMechanics/Master]
+[Physics/SolidMechanics/QuasiStatic]
   [all]
     add_variables = false
     strain = SMALL
@@ -103,7 +103,6 @@
 [MultiApps]
   [cardinal]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'cardinal_sub.i'
     execute_on = timestep_end
   []

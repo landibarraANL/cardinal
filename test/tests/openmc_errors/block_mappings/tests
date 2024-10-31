@@ -2,13 +2,14 @@
   [nonexistent_block]
     type = RunException
     input = nonexistent_block.i
-    expect_err = "Block 500 specified in 'tally_blocks' not found in mesh!"
-    requirement = "The system shall error if the user specifies a block ID for coupling that does not exist."
+    expect_err = "Block 'who' specified in 'blocks' not found in mesh!"
+    requirement = "The system shall error if the user specifies a block for coupling that does not exist."
     required_objects = 'OpenMCCellAverageProblem'
   []
   [empty_block]
     type = RunException
-    input = empty_block.i
+    input = nonexistent_block.i
+    cli_args = 'Problem/temperature_blocks=""'
     expect_err = "'temperature_blocks' cannot be empty!"
     requirement = "The system shall error if an empty vector is provided for the blocks"
     required_objects = 'OpenMCCellAverageProblem'
@@ -28,25 +29,21 @@
     requirement = "The system shall print a warning if some MOOSE elements are unmapped"
     required_objects = 'OpenMCCellAverageProblem'
   []
-  [skipping_openmc_feedback]
-    type = RunException
-    input = skipping_openmc_feedback.i
-    cli_args = '--error'
-    expect_err = "Skipping multiphysics feedback for 2 OpenMC cells!"
-    requirement = "The system shall print a warning if some OpenMC cells are unmapped"
-    required_objects = 'OpenMCCellAverageProblem'
-  []
   [multiple_phases]
     type = RunException
     input = multiple_phases.i
-    expect_err = "Cell id 4, instance 0 \(of 1\) mapped to 16 T elements, 3486 T\+rho elements, and 0 uncoupled elements."
-    requirement = "The system shall error if one OpenMC cell maps to more than one phase"
+    expect_err = "Cell id 4, instance 0 \(of 1\) mapped to:\n\n"
+                 "    16  elements with temperature feedback\n"
+                 "     0  elements with density feedback\n"
+                 "  3486  elements with both temperature and density feedback\n"
+                 "     0  uncoupled elements"
+    requirement = "The system shall error if one OpenMC cell maps to more than one type of feedback"
     required_objects = 'OpenMCCellAverageProblem'
   []
   [multiple_tally_settings]
     type = RunException
     input = multiple_tally_settings.i
-    expect_err = "cell id 4, instance 0 \(of 1\) maps to blocks with different tally settings!\nBlock 100 is in 'tally_blocks', but block 200 is not."
+    expect_err = "cell id 4, instance 0 \(of 1\) maps to blocks with different tally settings!\nBlock 100 is in 'blocks', but block 200 is not."
     requirement = "The system shall error if one OpenMC cell maps to multiple subdomains that don't all have the same tally setting"
     required_objects = 'OpenMCCellAverageProblem'
   []

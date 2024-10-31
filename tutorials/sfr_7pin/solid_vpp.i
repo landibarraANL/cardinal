@@ -268,7 +268,6 @@ pin_power = 21e3                              # bundle power (kW)
 [MultiApps]
   [nek]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'nek_vpp.i'
     sub_cycling = true
     execute_on = timestep_end
@@ -281,14 +280,12 @@ pin_power = 21e3                              # bundle power (kW)
     source_variable = temp
     from_multi_app = nek
     variable = nek_temp
-    fixed_meshes = true
   []
   [avg_flux] # sends heat flux in avg_flux to nekRS
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = avg_flux
     to_multi_app = nek
     variable = avg_flux
-    fixed_meshes = true
   []
   [flux_integral_to_nek] # sends the heat flux integral (for normalization) to nekRS
     type = MultiAppReporterTransfer

@@ -10,11 +10,7 @@ To access this tutorial,
 cd cardinal/tutorials/dagmc
 ```
 
-!alert! note title=Computing Needs
-No special computing needs are required for this tutorial.
-For testing purposes, you may choose to decrease the number of particles to
-solve faster.
-
+!alert! note title=DAGMC build
 To run this tutorial,
 you need to have built Cardinal with DAGMC support enabled, by setting
 `export ENABLE_DAGMC=true`.
@@ -70,7 +66,7 @@ The surface of the pincell is simply set to a constant value, $T_s=500$.
 Because heat transfer and fluid flow in the borated water is not modeled in this example,
 The top and bottom of the solid pincell
 are assumed insulated.
-In this example, the MOOSE heat conduction module will run first. The initial
+In this example, the MOOSE heat transfer module will run first. The initial
 solid temperature is 500&deg;C and the initial power is zero.
 
 ### OpenMC Model
@@ -102,7 +98,7 @@ The following sub-sections describe these files.
 
 ### Solid Input Files
 
-The solid phase is solved with the MOOSE heat conduction module, and is
+The solid phase is solved with the MOOSE heat transfer module, and is
 described in the `solid.i` input. The solid mesh is created using mesh generators
 in the `mesh.i` input:
 
@@ -114,7 +110,7 @@ We generate the mesh by running `cardinal-opt -i mesh.i --mesh-only` to create t
 !listing /tutorials/dagmc/solid.i
   end=Variables
 
-The heat conduction module will solve for temperature, with the heat equation.
+The heat transfer module will solve for temperature, with the heat equation.
 The variables, kernels, and boundary conditions are shown below.
 
 !listing /tutorials/dagmc/solid.i
@@ -176,10 +172,10 @@ in other tutorials.
   end=AuxVariables
 
 Next, the [Problem](https://mooseframework.inl.gov/syntax/Problem/index.html)
-block describes all objects necessary for the actual physics solve. To replace
-MOOSE finite element calculations with OpenMC particle transport calculations,
-the [OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) class
-is used.
+and [Tallies](/actions/AddTallyAction.md) blocks describe all objects necessary
+for the actual neutronics solve. To replace MOOSE finite element calculations
+with OpenMC particle transport calculations, the
+[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) class is used.
 
 !listing /tutorials/dagmc/openmc.i
   block=Problem
@@ -194,10 +190,9 @@ will automatically map from MOOSE elements to OpenMC cells, and store which MOOS
 are providing temperature feedback. Then when temperature is sent into OpenMC, that mapping is used to compute
 a volume-average temperature to apply to each OpenMC cell.
 
-This example uses mesh tallies, as indicated by the
-`tally_type`.
-[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) will then
-automatically add the necessary tallies.
+This example uses mesh tallies, as indicated by the [MeshTally](/tallies/MeshTally.md)
+in the `[Tallies]` block. [OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md)
+will then automatically add the OpenMC mesh tally using the information provided.
 Finally, we specify the level in the geometry on which the cells
 exist. Because we don't have any lattices or filled universes in our OpenMC model,
 the cell level is zero.
@@ -212,8 +207,12 @@ in the `[Mesh]` block vs. the DAGMC mesh) are completely unrelated to one anothe
 Next, we add a series of auxiliary variables for solution visualization
 (these are not requried for coupling). To help with understanding
 how the OpenMC model maps to the mesh in the `[Mesh]` block, we add auxiliary
-variables to visualize OpenMC's cell ID ([CellIDAux](/auxkernels/CellIDAux.md))
-and cell temperature ([CellTemperatureAux](/auxkernels/CellTemperatureAux.md)).
+variables to visualize OpenMC's
+cell temperature ([CellTemperatureAux](/auxkernels/CellTemperatureAux.md)).
+Cardinal will also automatically output a variable named `cell_id`
+([CellIDAux](https://cardinal.cels.anl.gov/source/auxkernels/CellIDAux.html))
+and a variable named `cell_instance` (
+[CellInstanceAux](https://cardinal.cels.anl.gov/source/auxkernels/CellInstanceAux.html)) to show the spatial mapping.
 
 !listing /tutorials/dagmc/openmc.i
   start=AuxVariables

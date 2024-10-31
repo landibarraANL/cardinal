@@ -33,14 +33,6 @@ dT = ${fparse power / mdot / Cp}
 # These auxiliary variables are all just for visualizing the solution and
 # the mapping - none of these are part of the calculation sequence
 
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-  [cell_instance]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [material_id]
     family = MONOMIAL
     order = CONSTANT
@@ -59,14 +51,6 @@ dT = ${fparse power / mdot / Cp}
   [material_id]
     type = CellMaterialIDAux
     variable = material_id
-  []
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-  [cell_instance]
-    type = CellInstanceAux
-    variable = cell_instance
   []
   [cell_temperature]
     type = CellTemperatureAux
@@ -120,15 +104,10 @@ dT = ${fparse power / mdot / Cp}
 
 [Problem]
   type = OpenMCCellAverageProblem
-  output = 'unrelaxed_tally_std_dev'
-  check_equal_mapped_tally_volumes = true
 
   power = ${power}
   scaling = 100.0
   density_blocks = '1'
-  tally_blocks = '2'
-  tally_type = cell
-  tally_name = heat_source
   cell_level = 0
 
   # This automatically creates these variables and will read from the non-default choice of 'temp'
@@ -144,16 +123,27 @@ dT = ${fparse power / mdot / Cp}
   batches = 30
   k_trigger = std_dev
   k_trigger_threshold = 7.5e-4
-  tally_trigger = rel_err
-  tally_trigger_threshold = 2e-2
   batch_interval = 50
   max_batches = 1000
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      blocks = '2'
+      name = heat_source
+
+      check_equal_mapped_tally_volumes = true
+
+      trigger = rel_err
+      trigger_threshold = 2e-2
+      output = unrelaxed_tally_std_dev
+    []
+  []
 []
 
 [MultiApps]
   [bison]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'bison.i'
     execute_on = timestep_begin
     sub_cycling = true
@@ -162,7 +152,7 @@ dT = ${fparse power / mdot / Cp}
 
 [Transfers]
   [solid_temp_to_openmc]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = T
     variable = solid_temp
     from_multi_app = bison
@@ -174,7 +164,7 @@ dT = ${fparse power / mdot / Cp}
     to_multi_app = bison
   []
   [temp_from_nek]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = nek_temp
     from_multi_app = bison
     variable = nek_temp
@@ -189,10 +179,7 @@ dT = ${fparse power / mdot / Cp}
 [Executioner]
   type = Transient
   dt = 0.5
-
-  steady_state_detection = true
-  check_aux = true
-  steady_state_tolerance = 1e-3
+  num_steps = 10
 []
 
 [Postprocessors]

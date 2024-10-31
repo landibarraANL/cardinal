@@ -65,7 +65,6 @@
 [MultiApps]
   [nek]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'nek.i'
     sub_cycling = true
     execute_on = timestep_end
@@ -78,14 +77,16 @@
     source_variable = temp
     from_multi_app = nek
     variable = nek_temp
+    search_value_conflicts = false
   []
   [flux]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = flux
     to_multi_app = nek
     variable = avg_flux
-    source_boundary = '1'
-    target_boundary = '1'
+    from_boundaries = '1'
+    to_boundaries = '1'
+    search_value_conflicts = false
   []
   [flux_integral]
     type = MultiAppPostprocessorTransfer

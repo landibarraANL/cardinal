@@ -12,15 +12,9 @@ To access this tutorial,
 cd cardinal/tutorials/gas_compact
 ```
 
-!alert! note title=Computing Needs
-No special computing needs are required for this tutorial.
-For testing purposes, you may choose to decrease the number of particles to
-solve faster.
-!alert-end!
-
 Cardinal contains convenient features for applying multiphysics
 feedback to heterogeneous domains, when a coupled physics application (such as the MOOSE
-heat conduction module) might *not* also resolve the heterogeneities. For instance, the
+heat transfer module) might *not* also resolve the heterogeneities. For instance, the
 fuel pebble model in Pronghorn
 [!cite](novak2021b) uses the Heat Source Decomposition method to predict pebble
 interior temperatures, which does not explicitly resolve the [!ac](TRISO) particles
@@ -188,7 +182,7 @@ describe these files.
 
 ### Solid Input Files
 
-The solid phase is solved with the MOOSE heat conduction module, and is described in
+The solid phase is solved with the MOOSE heat transfer module, and is described in
 the `solid.i` input. We define a number of constants at the beginning of the file and
 set up the mesh from a file.
 
@@ -202,7 +196,7 @@ boundary conditions we will apply.
   start=Variables
   end=AuxVariables
 
-The MOOSE heat conduction module will receive power from OpenMC in the form of
+The MOOSE heat transfer module will receive power from OpenMC in the form of
 an [AuxVariable](https://mooseframework.inl.gov/syntax/AuxVariables/index.html),
 so we define a receiver variable for the fission power, as `power`. We also define
 a variable `fluid_temp`, that we will use a [FunctionIC](https://mooseframework.inl.gov/source/ics/FunctionIC.html)
@@ -278,8 +272,8 @@ mapped to the OpenMC cells.
   start=AuxVariables
   end=ICs
 
-The `[Problem]` block is then used to specify settings for the OpenMC wrapping. We define a total power
-of 30 kW and indicate that we'd like to add tallies to the fuel compacts. The cell
+The `[Problem]` and `[Tallies]` blocks are then used to specify settings for the OpenMC wrapping. We define a total power
+of 30 kW and add a [CellTally](/tallies/CellTally.md) to the fuel compacts. The cell
 tally setup in Cardinal will then automatically add a tally for each unique cell ID+instance
 combination. By setting `temperature_blocks` to all blocks, OpenMC will then receive temperature
 from MOOSE for the entire domain (because the mesh mirror consists of these
@@ -294,7 +288,7 @@ we specify a `scaling` of 100, i.e. a multiplicative factor to apply to the
 Other features we use include an output of the fission tally standard deviation
 in units of W/m$^3$ to the `[Mesh]` by setting the `output` parameter. This is used to
 obtain the standard deviation of the heat source distribution from OpenMC in the same
-units as the heat source. We also leverage a helper utility in Cardinal by setting
+units as the heat source. We also leverage a helper utility in [CellTally](/tallies/CellTally.md) by setting
 `check_equal_mapped_tally_volumes` to `true`. This parameter will throw an error if
 the tallied OpenMC cells map to different volumes in the MOOSE domain. Because we know
 *a priori* that the equal-volume OpenMC tally cells *should* all map to equal volumes, this will

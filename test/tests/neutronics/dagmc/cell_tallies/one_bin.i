@@ -5,10 +5,6 @@
 []
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [cell_temperature]
     family = MONOMIAL
     order = CONSTANT
@@ -16,10 +12,6 @@
 []
 
 [AuxKernels]
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
   [cell_temperature]
     type = CellTemperatureAux
     variable = cell_temperature
@@ -38,13 +30,18 @@
 [Problem]
   type = OpenMCCellAverageProblem
   verbose = true
-  tally_type = cell
-  tally_blocks = '1 2'
   temperature_blocks = '1 2'
   cell_level = 0
   power = 100.0
 
   skinner = moab
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '1 2'
+    []
+  []
 []
 
 [UserObjects]
@@ -71,5 +68,5 @@
 
 [Outputs]
   exodus = true
-  hide = 'temp'
+  hide = 'temp cell_instance'
 []

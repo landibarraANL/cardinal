@@ -93,7 +93,7 @@ def coolant_density(t):
     value here in case you want to run these files in standalone mode (i.e. with
     the "openmc" executable).
 
-  Computes the helium density from temperature assuming a fixed operating pressure.
+  Computes the helium density (kg/m3) from temperature assuming a fixed operating pressure.
 
   Parameters
   ----------
@@ -106,8 +106,8 @@ def coolant_density(t):
     float or 1-D numpy array of float depending on t
   """
 
-  p_in_bar = outlet_P * 1.0e-5;
-  return 48.14 * p_in_bar / (t + 0.4446 * p_in_bar / math.pow(t, 0.2));
+  p_in_bar = outlet_P * 1.0e-5
+  return 48.14 * p_in_bar / (t + 0.4446 * p_in_bar / math.pow(t, 0.2))
 
 # -------------- Unit Conversions: OpenMC requires cm -----------
 m = 100.0
@@ -221,7 +221,7 @@ def unit_cell(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     # region in which TRISOs are generated
     r_triso = -fuel_cyl & +min_z & -max_z
 
-    rand_spheres = openmc.model.pack_spheres(radius=radius_pyc_outer, region=r_triso, pf=triso_pf)
+    rand_spheres = openmc.model.pack_spheres(radius=radius_pyc_outer, region=r_triso, pf=triso_pf, seed=1.0)
     random_trisos = [openmc.model.TRISO(radius_pyc_outer, u_triso, i) for i in rand_spheres]
 
     llc, urc = r_triso.bounding_box
@@ -287,7 +287,7 @@ def unit_cell(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     hex_lattice.outer = inf_graphite_univ
 
     # hexagonal bounding cell
-    hex = openmc.hexagonal_prism(cell_edge_length, hex_orientation, boundary_type='periodic')
+    hex = openmc.model.HexagonalPrism(cell_edge_length, hex_orientation, boundary_type='periodic')
 
     hex_cell_vol = 6.0 * (math.sqrt(3) / 4.0) * cell_edge_length**2 * reactor_height
 
@@ -300,7 +300,7 @@ def unit_cell(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     max_z.boundary_type = 'vacuum'
 
     # fill the unit cell with the hex lattice
-    hex_cell = openmc.Cell(region=hex & +min_z & -max_z, fill=hex_lattice)
+    hex_cell = openmc.Cell(region=-hex & +min_z & -max_z, fill=hex_lattice)
 
     model.geometry = openmc.Geometry([hex_cell])
 
@@ -321,8 +321,8 @@ def unit_cell(n_ax_zones, n_inactive, n_active, add_entropy_mesh=False):
     hexagon_half_flat = math.sqrt(3.0) / 2.0 * cell_edge_length
     lower_left = (-cell_edge_length, -hexagon_half_flat, reactor_bottom)
     upper_right = (cell_edge_length, hexagon_half_flat, reactor_top)
-    source_dist = openmc.stats.Box(lower_left, upper_right, only_fissionable=True)
-    source = openmc.Source(space=source_dist)
+    source_dist = openmc.stats.Box(lower_left, upper_right)
+    source = openmc.IndependentSource(space=source_dist)
     settings.source = source
 
     if (add_entropy_mesh):

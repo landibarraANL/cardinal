@@ -33,6 +33,7 @@ MooseEnum getRelaxationEnum();
 MooseEnum getTallyTriggerEnum();
 MooseEnum getInitialPropertiesEnum();
 MultiMooseEnum getTallyScoreEnum();
+MooseEnum getEnergyGroupsEnum();
 MooseEnum getNekMeshEnum();
 
 namespace nek_mesh
@@ -120,7 +121,8 @@ namespace operation
 enum OperationEnum
 {
   max,
-  min
+  min,
+  average
 };
 } // namespace operation
 
@@ -167,12 +169,41 @@ enum TallyTriggerTypeEnum
 };
 } // namespace trigger
 
+namespace energyfilter
+{
+/// Type of energy group structure to use
+enum GroupStructureEnum
+{
+  CASMO_2,
+  CASMO_4,
+  CASMO_8,
+  CASMO_16,
+  CASMO_25,
+  CASMO_40,
+  VITAMINJ_42,
+  SCALE_44,
+  MPACT_51,
+  MPACT_60,
+  MPACT_69,
+  CASMO_70,
+  XMAS_172,
+  VITAMINJ_175,
+  SCALE_252,
+  TRIPOLI_315,
+  SHEM_361,
+  CCFE_709,
+  UKAEA_1102,
+  ECCO_1968
+};
+} // namespace energyfilter
+
 namespace coupling
 {
 /// Type of feedback in Monte Carlo simulation
 enum CouplingFields
 {
   temperature,
+  density,
   density_and_temperature,
   none
 };
@@ -197,17 +228,6 @@ enum EigenvalueEnum
   combined
 };
 } // namespace eigenvalue
-
-namespace channel_type
-{
-/// Type of subchannel
-enum ChannelTypeEnum
-{
-  interior,
-  edge,
-  corner
-};
-} // namespace channel_type
 
 namespace relaxation
 {

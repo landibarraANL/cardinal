@@ -20,8 +20,13 @@
   cell_level = 0
   normalize_by_global_tally = false
 
-  tally_type = mesh
   power = 100.0
+
+  [Tallies]
+    [Mesh]
+      type = MeshTally
+    []
+  []
 []
 
 [Executioner]
@@ -38,5 +43,5 @@
 [Outputs]
   execute_on = final
   exodus = true
-  hide = 'temp'
+  hide = 'temp cell_instance cell_id'
 []

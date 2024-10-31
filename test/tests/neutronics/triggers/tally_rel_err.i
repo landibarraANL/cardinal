@@ -20,15 +20,20 @@
 [Problem]
   type = OpenMCCellAverageProblem
   power = 100.0
-  temperature_blocks = '100'
   cell_level = 0
-  tally_type = cell
-  normalize_by_global_tally = false
-  initial_properties = xml
 
-  tally_trigger = rel_err
-  tally_trigger_threshold = 2e-2
+  normalize_by_global_tally = false
+
   max_batches = 200
+
+  [Tallies]
+    [Cell]
+      type = CellTally
+      blocks = '100'
+      trigger = rel_err
+      trigger_threshold = 2e-2
+    []
+  []
 []
 
 [Executioner]

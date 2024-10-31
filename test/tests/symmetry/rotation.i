@@ -48,13 +48,6 @@
 
 [Problem]
   type = OpenMCCellAverageProblem
-  power = 100.0
-  temperature_blocks = '100'
-  cell_level = 0
-  tally_type = cell
-  normalize_by_global_tally = false
-  initial_properties = xml
-
   symmetry_mapper = sym
 []
 
@@ -74,7 +67,4 @@
 
 [Outputs]
   exodus = true
-
-  # we are only interested in the point transformation aspects here
-  hide = 'kappa_fission temp'
 []

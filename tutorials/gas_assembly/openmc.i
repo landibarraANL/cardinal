@@ -47,14 +47,6 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
 []
 
 [AuxVariables]
-  [cell_id]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-  [cell_instance]
-    family = MONOMIAL
-    order = CONSTANT
-  []
   [material_id]
     family = MONOMIAL
     order = CONSTANT
@@ -91,14 +83,6 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
   [material_id]
     type = CellMaterialIDAux
     variable = material_id
-  []
-  [cell_id]
-    type = CellIDAux
-    variable = cell_id
-  []
-  [cell_instance]
-    type = CellInstanceAux
-    variable = cell_instance
   []
   [cell_temperature]
     type = CellTemperatureAux
@@ -162,16 +146,11 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
 
 [Problem]
   type = OpenMCCellAverageProblem
-  output = 'unrelaxed_tally_std_dev'
-  check_equal_mapped_tally_volumes = true
 
   identical_cell_fills = '2'
 
   power = ${fparse power / n_bundles}
   scaling = 100.0
-  tally_blocks = '2'
-  tally_type = cell
-  tally_name = heat_source
   cell_level = 1
 
   relaxation = constant
@@ -191,18 +170,26 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
   temperature_variables = 'solid_temp; thm_temp'
   temperature_blocks =    '1 2 4;      101'
   density_blocks = '101'
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      blocks = '2'
+      name = heat_source
+      check_equal_mapped_tally_volumes = true
+      output = 'unrelaxed_tally_std_dev'
+    []
+  []
 []
 
 [MultiApps]
   [bison]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'solid.i'
     execute_on = timestep_begin
   []
   [thm]
     type = FullSolveMultiApp
-    app_type = CardinalApp
     input_files = 'thm.i'
     execute_on = timestep_end
     max_procs_per_app = 1
@@ -221,17 +208,16 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
   []
   [heat_flux_to_openmc]
     type = MultiAppGeneralFieldNearestLocationTransfer
-    fixed_meshes = true
     source_variable = flux
     variable = flux
     from_multi_app = bison
-    source_boundary = 'fluid_solid_interface'
-    target_boundary = 'fluid_solid_interface'
+    from_boundaries = 'fluid_solid_interface'
+    to_boundaries = 'fluid_solid_interface'
     from_postprocessors_to_be_preserved = flux_integral
     to_postprocessors_to_be_preserved = flux_integral
   []
   [source_to_bison]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = heat_source
     variable = power
     to_multi_app = bison
@@ -256,15 +242,13 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
     source_variable = T_wall
     from_multi_app = thm
     variable = thm_temp_wall
-    fixed_meshes = true
-    target_boundary = 'fluid_solid_interface'
+    to_boundaries = 'fluid_solid_interface'
   []
   [T_bulk_from_thm]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = T
     from_multi_app = thm
     variable = thm_temp
-    fixed_meshes = true
   []
 
   # just for postprocessing purposes
@@ -273,14 +257,12 @@ num_layers_for_THM = 50      # number of elements in the THM model; for the conv
     source_variable = p
     from_multi_app = thm
     variable = thm_pressure
-    fixed_meshes = true
   []
   [velocity_from_thm]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = vel_z
     from_multi_app = thm
     variable = thm_velocity
-    fixed_meshes = true
   []
 []
 

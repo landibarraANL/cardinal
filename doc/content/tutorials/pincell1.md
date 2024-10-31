@@ -12,12 +12,6 @@ To access this tutorial,
 cd cardinal/tutorials/lwr_solid
 ```
 
-!alert! note title=Computing Needs
-No special computing needs are required for this tutorial.
-For testing purposes, you may choose to decrease the number of particles to
-solve faster.
-!alert-end!
-
 At a high level, Cardinal's wrapping of OpenMC consists of two major stages - first, establishing
 the mapping between OpenMC's geometry and the [MooseMesh](https://mooseframework.inl.gov/source/mesh/MooseMesh.html)
 with which OpenMC communicates. This stage consists of:
@@ -114,7 +108,7 @@ are assumed insulated.
 
 !include radiation_gap.md
 
-In this example, the MOOSE heat conduction module will run first. The initial
+In this example, the MOOSE heat transfer module will run first. The initial
 solid temperature is 280&deg;C and the initial power is zero.
 
 ### OpenMC Model
@@ -157,10 +151,12 @@ When setting up your OpenMC coupling, we *highly* recommend running Cardinal wit
 `verbose` set to `true`.
 This setting will display the mapping of OpenMC cells to
 MOOSE elements and should help provide a grasp on the "level" concept.
-We also recommend exploring the OpenMC-MOOSE mapping using
-[CellIDAux](https://cardinal.cels.anl.gov/source/auxkernels/CellIDAux.html)
-and [CellInstanceAux](https://cardinal.cels.anl.gov/source/auxkernels/CellInstanceAux.html)
-auxkernels.
+Cardinal also automatically outputs `cell_id` and `cell_instance`, which hold
+info on how the OpenMC cells (IDs and instances) map to the mesh.
+Cardinal will also automatically output a variable named `cell_id`
+([CellIDAux](https://cardinal.cels.anl.gov/source/auxkernels/CellIDAux.html))
+and a variable named `cell_instance` (
+[CellInstanceAux](https://cardinal.cels.anl.gov/source/auxkernels/CellInstanceAux.html)) to show the spatial mapping.
 
 OpenMC's Python [!ac](API)
 is used to create the pincell model with the script shown below. First, we define
@@ -220,7 +216,7 @@ The following sub-sections describe these files.
 
 ### Solid Input Files
 
-The solid phase is solved with the MOOSE heat conduction module, and is
+The solid phase is solved with the MOOSE heat transfer module, and is
 described in the `solid.i` input. The solid mesh is created using mesh generators
 in the `mesh.i` input:
 
@@ -238,7 +234,7 @@ MOOSE is dimension-agnostic, and the same physics model can be set up in any
 length unit provided proper scalings are applied to material properties, source terms,
 and the mesh. In this example, we set up the solid input file in length units of centimeters.
 
-The heat conduction module will solve for temperature, which we define
+The heat transfer module will solve for temperature, which we define
 as a nonlinear variable and apply a simple uniform initial condition.
 
 !listing /tutorials/lwr_solid/solid.i
@@ -336,13 +332,24 @@ in other tutorials.
   end=AuxVariables
 
 Next, the [Problem](https://mooseframework.inl.gov/syntax/Problem/index.html)
-block describes all objects necessary for the actual physics solve. To replace
-MOOSE finite element calculations with OpenMC particle transport calculations,
-the [OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) class
-is used.
+and [Tallies](/actions/AddTallyAction.md) blocks describe all objects necessary for the
+actual neutronics solve. To replace MOOSE finite element calculations
+with OpenMC particle transport calculations, the
+[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) class is used.
 
 !listing /tutorials/lwr_solid/openmc.i
   block=Problem
+
+For this example, we first start by specifying that we wish to add a
+[CellTally](/tallies/CellTally.md) in `[Tallies]`. The `blocks` are
+then used to indicate which OpenMC cells to add tallies to
+(as inferred from the mapping of MOOSE elements to OpenMC cells). If not specified,
+we add tallies to all OpenMC cells. But for this problem, we already know that the
+cladding doesn't have any fissile material, so we can save some effort with the
+tallies by skipping tallies in those regions by setting
+`blocks` to blocks 2 and 3.
+[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) will then
+take the information provided in the `[Tallies]` block and add the necessary OpenMC tally.
 
 For this example, we specify the total fission power by which to normalize OpenMC's
 tally results (because OpenMC's tally results are in units of eV/source particle).
@@ -352,20 +359,7 @@ Here, we specify temperature feedback for the pellet (blocks 2 and 3) and the cl
 (block 1). During the initialization, [OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md)
 will automatically map from MOOSE elements to OpenMC cells, and store which MOOSE elements
 are providing feedback. Then when temperature is sent into OpenMC, that mapping is used to compute
-a volume-average temperature to apply to each OpenMC cell.
-
-This example uses cell tallies, as indicated by
-`tally_type`.
-The `tally_blocks` are
-then used to indicate which OpenMC cells to add tallies to
-(as inferred from the mapping of MOOSE elements to OpenMC cells). If not specified,
-we add tallies to all OpenMC cells. But for this problem, we already know that the
-cladding doesn't have any fissile material, so we can save some effort with the
-tallies by skipping tallies in those regions by setting
-`tally_blocks` to blocks 2 and 3.
-[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md) will then
-automatically add the necessary tallies.
-We specify the level in the geometry on which the cells
+a volume-average temperature to apply to each OpenMC cell. We specify the level in the geometry on which the cells
 exist. Because we don't have any lattices or filled universes in our OpenMC model,
 the cell level is zero.
 
@@ -378,15 +372,12 @@ mapping should show close agreement between these two values.
 
 Next, we add a series of auxiliary variables for solution visualization
 (these are not requried for coupling). To help with understanding
-how the OpenMC model maps to the mesh in the `[Mesh]` block, we add auxiliary
-variables to visualize OpenMC's cell ID ([CellIDAux](/auxkernels/CellIDAux.md)),
-cell instance ([CellInstanceAux](/auxkernels/CellInstanceAux.md)),
-and cell temperature ([CellTemperatureAux](/auxkernels/CellTemperatureAux.md)) on
-the `[Mesh]`.
+how Cardinal volume-averages temperature over the mesh, we add a
+[CellTemperatureAux](/auxkernels/CellTemperatureAux.md).
 
 !listing /tutorials/lwr_solid/openmc.i
   start=AuxVariables
-  end=Problem
+  end=Tallies
 
 Next, we specify an executioner and output settings. Even though OpenMC technically
 performs a criticality calculation (with no time dependence), we use the transient
@@ -600,12 +591,10 @@ point to a different input file.
 !listing /tutorials/lwr_solid/solid_um.i
   block=MultiApps
 
-Then, in `openmc_um.i`, we make small modifications to the settings for the
-[OpenMCCellAverageProblem](/problems/OpenMCCellAverageProblem.md). We indicate that
-`tally_type`
-is set to `mesh`. By default, OpenMC will then just tally directly on the MOOSE
-`[Mesh]` (though we could have specified a different mesh by providing a
-`mesh_template` file name).
+Then, in `openmc_um.i`, we change the [CellTally](/tallies/CellTally.md)
+to a [MeshTally](/tallies/MeshTally.md). By default, OpenMC will then just
+tally directly on the MOOSE `[Mesh]` (though we could have specified a
+different mesh by providing a`mesh_template` file name).
 
 !listing /tutorials/lwr_solid/openmc_um.i
   block=Problem

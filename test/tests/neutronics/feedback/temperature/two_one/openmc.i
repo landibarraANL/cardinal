@@ -54,8 +54,6 @@
   verbose = true
   power = 100.0
 
-  tally_type = cell
-
   temperature_blocks = '0 3'
   cell_level = 0
 []

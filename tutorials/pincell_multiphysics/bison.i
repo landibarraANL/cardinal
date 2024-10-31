@@ -123,7 +123,6 @@ dT = ${fparse power / mdot / Cp}
 [MultiApps]
   [nek]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'nek.i'
     execute_on = timestep_end
     sub_cycling = true
@@ -136,15 +135,13 @@ dT = ${fparse power / mdot / Cp}
     source_variable = temp
     from_multi_app = nek
     variable = nek_temp
-    fixed_meshes = true
   []
   [flux]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = flux
     to_multi_app = nek
     variable = avg_flux
-    source_boundary = '5'
-    fixed_meshes = true
+    from_boundaries = '5'
   []
   [flux_integral]
     type = MultiAppPostprocessorTransfer

@@ -64,7 +64,6 @@
 [MultiApps]
   [openmc]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'openmc.i'
     execute_on = timestep_end
   []
@@ -72,7 +71,7 @@
 
 [Transfers]
   [heat_source_from_openmc]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     from_multi_app = openmc
     variable = heat_source
     source_variable = heat_source
@@ -80,7 +79,7 @@
     to_postprocessors_to_be_preserved = source_integral
   []
   [temp_to_openmc]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     to_multi_app = openmc
     variable = temp
     source_variable = temp

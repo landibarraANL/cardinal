@@ -94,15 +94,10 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
 
 [Problem]
   type = OpenMCCellAverageProblem
-  output = 'unrelaxed_tally_std_dev'
-  check_equal_mapped_tally_volumes = true
 
   power = ${unit_cell_power}
   scaling = 100.0
   density_blocks = ${density_blocks}
-  tally_blocks = ${fuel_blocks}
-  tally_type = cell
-  tally_name = heat_source
   cell_level = 1
 
   relaxation = robbins_monro
@@ -112,11 +107,24 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
 
   k_trigger = std_dev
   k_trigger_threshold = 7.5e-4
-  tally_trigger = rel_err
-  tally_trigger_threshold = 1e-2
   batches = 40
   max_batches = 100
   batch_interval = 5
+
+  [Tallies]
+    [heat_source]
+      type = CellTally
+      blocks = ${fuel_blocks}
+      name = heat_source
+
+      check_equal_mapped_tally_volumes = true
+
+      trigger = rel_err
+      trigger_threshold = 1e-2
+
+      output = 'unrelaxed_tally_std_dev'
+    []
+  []
 []
 
 [Executioner]
@@ -132,13 +140,11 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
 [MultiApps]
   [bison]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'solid_thm.i'
     execute_on = timestep_begin
   []
   [thm]
     type = FullSolveMultiApp
-    app_type = CardinalApp
     input_files = 'thm.i'
     execute_on = timestep_end
     max_procs_per_app = 1
@@ -155,17 +161,16 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
   []
   [heat_flux_to_openmc]
     type = MultiAppGeneralFieldNearestLocationTransfer
-    fixed_meshes = true
     source_variable = flux
     variable = flux
     from_multi_app = bison
-    source_boundary = 'fluid_solid_interface'
-    target_boundary = 'fluid_solid_interface'
+    from_boundaries = 'fluid_solid_interface'
+    to_boundaries = 'fluid_solid_interface'
     from_postprocessors_to_be_preserved = flux_integral
     to_postprocessors_to_be_preserved = flux_integral
   []
   [source_to_bison]
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     source_variable = heat_source
     variable = power
     to_multi_app = bison
@@ -190,14 +195,12 @@ unit_cell_power = ${fparse power / (n_bundles * n_coolant_channels_per_block) * 
     source_variable = T_wall
     from_multi_app = thm
     variable = thm_temp_wall
-    fixed_meshes = true
   []
   [T_bulk_from_thm]
     type = MultiAppGeneralFieldNearestLocationTransfer
     source_variable = T
     from_multi_app = thm
     variable = thm_temp
-    fixed_meshes = true
   []
 []
 

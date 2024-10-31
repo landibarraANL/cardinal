@@ -93,7 +93,6 @@
 [MultiApps]
   [nek]
     type = TransientMultiApp
-    app_type = CardinalApp
     input_files = 'nek.i'
     sub_cycling = true
     execute_on = timestep_end
@@ -113,7 +112,7 @@
     source_variable = flux
     to_multi_app = nek
     variable = avg_flux
-    source_boundary = 'right'
+    from_boundaries = 'right'
   []
   [flux_integral]
     type = MultiAppPostprocessorTransfer
