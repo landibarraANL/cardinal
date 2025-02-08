@@ -89,7 +89,8 @@ TallyBase::TallyBase(const InputParameters & parameters)
     _tally_trigger(isParamValid("trigger") ? &getParam<MultiMooseEnum>("trigger") : nullptr),
     _trigger_ignore_zeros(getParam<std::vector<bool>>("trigger_ignore_zeros")),
     _renames_tally_vars(isParamValid("name")),
-    _has_outputs(isParamValid("output"))
+    _has_outputs(isParamValid("output")),
+    _is_adaptive(_openmc_problem.hasAdaptivity())
 {
   if (isParamValid("score"))
   {
@@ -109,7 +110,8 @@ TallyBase::TallyBase(const InputParameters & parameters)
 
     // Photon heating tallies cannot use tracklength estimators.
     if (estimator == tally::tracklength && openmc::settings::photon_transport && heating)
-      mooseError("Tracklength estimators are currently incompatible with photon transport and "
+      paramError("estimator",
+                 "Tracklength estimators are currently incompatible with photon transport and "
                  "heating scores! For more information: https://tinyurl.com/3wre3kwt");
 
     _estimator = _openmc_problem.tallyEstimator(estimator);
@@ -136,7 +138,8 @@ TallyBase::TallyBase(const InputParameters & parameters)
         "Otherwise, you will underpredict the true energy deposition.");
 
   if (isParamValid("trigger") != isParamValid("trigger_threshold"))
-    mooseError("You must either specify none or both of 'trigger' and "
+    paramError("trigger",
+               "You must either specify none or both of 'trigger' and "
                "'trigger_threshold'. You have specified only one.");
 
   if (_tally_trigger)
@@ -145,21 +148,24 @@ TallyBase::TallyBase(const InputParameters & parameters)
     _tally_trigger_threshold = getParam<std::vector<Real>>("trigger_threshold");
 
     if (_tally_trigger->size() != _tally_score.size())
-      mooseError("'trigger' (size " + std::to_string(_tally_trigger->size()) +
-                 ") must have the same length as 'score' (size " +
-                 std::to_string(_tally_score.size()) + ")");
+      paramError("trigger",
+                 "'trigger' (size " + std::to_string(_tally_trigger->size()) +
+                     ") must have the same length as 'score' (size " +
+                     std::to_string(_tally_score.size()) + ")");
 
     if (_tally_trigger_threshold.size() != _tally_score.size())
-      mooseError("'trigger_threshold' (size " + std::to_string(_tally_trigger_threshold.size()) +
-                 ") must have the same length as 'score' (size " +
-                 std::to_string(_tally_score.size()) + ")");
+      paramError("trigger_threshold",
+                 "'trigger_threshold' (size " + std::to_string(_tally_trigger_threshold.size()) +
+                     ") must have the same length as 'score' (size " +
+                     std::to_string(_tally_score.size()) + ")");
 
     if (_trigger_ignore_zeros.size() > 1)
     {
       if (_tally_score.size() != _trigger_ignore_zeros.size())
-        mooseError("'trigger_ignore_zeros' (size " + std::to_string(_trigger_ignore_zeros.size()) +
-                   ") must have the same length as 'score' (size " +
-                   std::to_string(_tally_score.size()) + ")");
+        paramError("trigger_ignore_zeros",
+                   "'trigger_ignore_zeros' (size " + std::to_string(_trigger_ignore_zeros.size()) +
+                       ") must have the same length as 'score' (size " +
+                       std::to_string(_tally_score.size()) + ")");
     }
     else if (_trigger_ignore_zeros.size() == 1)
       _trigger_ignore_zeros.resize(_tally_score.size(), _trigger_ignore_zeros[0]);
@@ -173,7 +179,7 @@ TallyBase::TallyBase(const InputParameters & parameters)
     for (const auto & filter_name : getParam<std::vector<std::string>>("filters"))
     {
       if (!_openmc_problem.hasFilter(filter_name))
-        mooseError("Filter with the name " + filter_name + " does not exist!");
+        paramError("filters", "Filter with the name " + filter_name + " does not exist!");
 
       _ext_filters.push_back(_openmc_problem.getFilter(filter_name));
     }
@@ -209,7 +215,7 @@ TallyBase::TallyBase(const InputParameters & parameters)
   }
 
   if (_tally_name.size() != _tally_score.size())
-    mooseError("'name' must be the same length as 'score'!");
+    paramError("name", "'name' must be the same length as 'score'!");
 
   // Modify the variable names so they take into account the bins in the external filters.
   auto all_var_names = _tally_name;
@@ -393,6 +399,28 @@ TallyBase::getWrappedTally() const
     mooseError("This tally has not been initialized!");
 
   return _local_tally;
+}
+
+int32_t
+TallyBase::getTallyID() const
+{
+  return getWrappedTally()->id();
+}
+
+std::vector<std::string>
+TallyBase::getScoreVars(const std::string & score) const
+{
+  std::vector<std::string> score_vars;
+  if (!hasScore(score))
+    return score_vars;
+
+  unsigned int idx =
+      std::find(_tally_score.begin(), _tally_score.end(), score) - _tally_score.begin();
+  std::copy(_tally_name.begin() + idx * _num_ext_filter_bins,
+            _tally_name.begin() + (idx + 1) * _num_ext_filter_bins,
+            std::back_inserter(score_vars));
+
+  return score_vars;
 }
 
 void

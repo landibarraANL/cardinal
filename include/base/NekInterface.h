@@ -57,6 +57,13 @@ dfloat * getSgeo();
 dfloat * getVgeo();
 
 /**
+ * Check that the field specified can be accessed, e.g., if a user is requesting
+ * to access temperature, the problem must have a temperature variable
+ * @param[in] field field to check
+ */
+void checkFieldValidity(const field::NekFieldEnum & field);
+
+/**
  * Set the absolute tolerance for checking energy conservation in data transfers to Nek
  * @param[in] tol tolerance
  */
@@ -821,6 +828,27 @@ double velocity_z(const int id);
  * @return velocity magnitude at index
  */
 double velocity(const int id);
+
+/**
+ * Get the x-velocity squared at given GLL index
+ * @param[in] id GLL index
+ * @return square of x-velocity at index
+ */
+double velocity_x_squared(const int id);
+
+/**
+ * Get the y-velocity squared at given GLL index
+ * @param[in] id GLL index
+ * @return square of y-velocity at index
+ */
+double velocity_y_squared(const int id);
+
+/**
+ * Get the z-velocity squared at given GLL index
+ * @param[in] id GLL index
+ * @return square of z-velocity at index
+ */
+double velocity_z_squared(const int id);
 
 /**
  * Write a value into the user scratch space that holds the flux

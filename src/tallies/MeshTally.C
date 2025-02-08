@@ -19,6 +19,8 @@
 #ifdef ENABLE_OPENMC_COUPLING
 #include "MeshTally.h"
 
+#include "libmesh/replicated_mesh.h"
+
 registerMooseObject("CardinalApp", MeshTally);
 
 InputParameters
@@ -34,6 +36,10 @@ MeshTally::validParams()
   params.addParam<Point>("mesh_translation",
                          "Coordinate to which this mesh should be "
                          "translated. Units must match those used to define the [Mesh].");
+  params.addParam<std::vector<SubdomainName>>(
+      "blocks",
+      "Subdomains for which to add tallies in OpenMC. If not provided, this mesh "
+      "tally will be applied over the entire mesh.");
 
   // The index of this tally into an array of mesh translations. Defaults to zero.
   params.addPrivateParam<unsigned int>("instance", 0);
@@ -45,13 +51,15 @@ MeshTally::MeshTally(const InputParameters & parameters)
   : TallyBase(parameters),
     _mesh_translation(isParamValid("mesh_translation") ? getParam<Point>("mesh_translation")
                                                        : Point(0.0, 0.0, 0.0)),
-    _instance(getParam<unsigned int>("instance"))
+    _instance(getParam<unsigned int>("instance")),
+    _use_dof_map(_is_adaptive || isParamValid("blocks"))
 {
   // Error check the estimators.
   if (isParamValid("estimator"))
   {
     if (_estimator == openmc::TallyEstimator::TRACKLENGTH)
-      mooseError("Tracklength estimators are currently incompatible with mesh tallies!");
+      paramError("estimator",
+                 "Tracklength estimators are currently incompatible with mesh tallies!");
   }
   else
     _estimator = openmc::TallyEstimator::COLLISION;
@@ -62,7 +70,18 @@ MeshTally::MeshTally(const InputParameters & parameters)
         "Mesh tallies currently require 'allow_renumbering = false' to be set in the [Mesh]!");
 
   if (isParamValid("mesh_template"))
+  {
+    if (_is_adaptive)
+      paramError("mesh_template",
+                 "Adaptivity is not supported when loading a mesh from 'mesh_template'!");
+
+    if (isParamValid("blocks"))
+      paramError("blocks",
+                 "Block restriction is currently not supported for mesh tallies which load a "
+                 "mesh from a file!");
+
     _mesh_template_filename = &getParam<std::string>("mesh_template");
+  }
   else
   {
     if (std::abs(_openmc_problem.scaling() - 1.0) > 1e-6)
@@ -80,8 +99,28 @@ MeshTally::MeshTally(const InputParameters & parameters)
                  "for distributed meshes!");
 
     if (isParamValid("mesh_translation"))
-      mooseError("The mesh filter cannot be translated if directly tallying on the mesh "
+      paramError("mesh_translation",
+                 "The mesh filter cannot be translated if directly tallying on the mesh "
                  "provided in the [Mesh] block!");
+
+    // Fetch subdomain IDs for block restrictions.
+    if (isParamValid("blocks"))
+    {
+      auto block_names = getParam<std::vector<SubdomainName>>("blocks");
+      if (block_names.empty())
+        paramError("blocks", "Subdomain names must be provided if using 'blocks'!");
+
+      auto block_ids = _mesh.getSubdomainIDs(block_names);
+      std::copy(
+          block_ids.begin(), block_ids.end(), std::inserter(_tally_blocks, _tally_blocks.end()));
+
+      // Check to make sure all of the blocks are in the mesh.
+      const auto & subdomains = _mesh.meshSubdomains();
+      for (std::size_t b = 0; b < block_names.size(); ++b)
+        if (subdomains.find(block_ids[b]) == subdomains.end())
+          paramError("blocks",
+                     "Block '" + block_names[b] + "' specified in 'blocks' not found in mesh!");
+    }
   }
 
   /**
@@ -97,21 +136,60 @@ std::pair<unsigned int, openmc::Filter *>
 MeshTally::spatialFilter()
 {
   // Create the OpenMC mesh which will be tallied on.
-  std::unique_ptr<openmc::LibMesh> tally_mesh;
   if (!_mesh_template_filename)
-    tally_mesh = std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _openmc_problem.scaling());
+  {
+    auto msh = dynamic_cast<const libMesh::ReplicatedMesh *>(_mesh.getMeshPtr());
+    if (!msh)
+      mooseError("Internal error: The mesh is not a replicated mesh.");
+
+    // Adaptivity and block restriction both require a map from the element subsets we want to
+    // tally on to the full mesh.
+    if (_use_dof_map)
+    {
+      _bin_to_element_mapping.clear();
+
+      auto begin = _tally_blocks.size() > 0
+                       ? msh->active_subdomain_set_elements_begin(_tally_blocks)
+                       : msh->active_elements_begin();
+      auto end = _tally_blocks.size() > 0 ? msh->active_subdomain_set_elements_end(_tally_blocks)
+                                          : msh->active_elements_end();
+      for (const auto & old_elem : libMesh::as_range(begin, end))
+        _bin_to_element_mapping.push_back(old_elem->id());
+
+      _bin_to_element_mapping.shrink_to_fit();
+    }
+
+    // When block restriction is active we need to create a copy of the mesh which only contains
+    // elements in the desired blocks.
+    if (_tally_blocks.size() > 0)
+    {
+      _libmesh_mesh_copy =
+          std::make_unique<libMesh::ReplicatedMesh>(_openmc_problem.comm(), _mesh.dimension());
+
+      msh->create_submesh(*_libmesh_mesh_copy.get(),
+                          msh->active_subdomain_set_elements_begin(_tally_blocks),
+                          msh->active_subdomain_set_elements_end(_tally_blocks));
+      _libmesh_mesh_copy->allow_find_neighbors(true);
+      _libmesh_mesh_copy->allow_renumbering(false);
+      _libmesh_mesh_copy->prepare_for_use();
+
+      openmc::model::meshes.emplace_back(
+          std::make_unique<openmc::LibMesh>(*_libmesh_mesh_copy.get(), _openmc_problem.scaling()));
+    }
+    else
+      openmc::model::meshes.emplace_back(
+          std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _openmc_problem.scaling()));
+  }
   else
-    tally_mesh =
-        std::make_unique<openmc::LibMesh>(*_mesh_template_filename, _openmc_problem.scaling());
+    openmc::model::meshes.emplace_back(
+        std::make_unique<openmc::LibMesh>(*_mesh_template_filename, _openmc_problem.scaling()));
+
+  _mesh_index = openmc::model::meshes.size() - 1;
+  _mesh_template = dynamic_cast<openmc::LibMesh *>(openmc::model::meshes[_mesh_index].get());
 
   // by setting the ID to -1, OpenMC will automatically detect the next available ID
-  tally_mesh->set_id(-1);
-  tally_mesh->output_ = false;
-  _mesh_template = tally_mesh.get();
-
-  // Create the mesh filter itself.
-  _mesh_index = openmc::model::meshes.size();
-  openmc::model::meshes.push_back(std::move(tally_mesh));
+  _mesh_template->set_id(-1);
+  _mesh_template->output_ = false;
 
   _mesh_filter = dynamic_cast<openmc::MeshFilter *>(openmc::Filter::create("mesh"));
   _mesh_filter->set_mesh(_mesh_index);
@@ -146,23 +224,23 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
   {
     for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
     {
-      Real power_fraction = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
+      Real unnormalized_tally = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
 
       // divide each tally by the volume that it corresponds to in MOOSE
       // because we will apply it as a volumetric tally (per unit volume).
       // Because we require that the mesh template has units of cm based on the
       // mesh constructors in OpenMC, we need to adjust the division
-      Real volumetric_power = power_fraction;
-      volumetric_power *= norm_by_src_rate
+      Real volumetric_tally = unnormalized_tally;
+      volumetric_tally *= norm_by_src_rate
                               ? _openmc_problem.tallyMultiplier(global_score) /
                                     _mesh_template->volume(e) * _openmc_problem.scaling() *
                                     _openmc_problem.scaling() * _openmc_problem.scaling()
                               : 1.0;
-      total += power_fraction;
+      total += unnormalized_tally;
 
-      std::vector<unsigned int> elem_ids = {mesh_offset + e};
       auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
-      fillElementalAuxVariable(var, elem_ids, volumetric_power);
+      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+      fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
     }
   }
 
@@ -180,7 +258,8 @@ MeshTally::checkMeshTemplateAndTranslations() const
   unsigned int mesh_offset = _instance * _mesh_filter->n_bins();
   for (int e = 0; e < _mesh_filter->n_bins(); ++e)
   {
-    auto elem_ptr = _mesh.queryElemPtr(mesh_offset + e);
+    auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+    auto elem_ptr = _mesh.queryElemPtr(elem_id);
 
     // if element is not on this part of the distributed mesh, skip it
     if (!elem_ptr)
@@ -212,11 +291,12 @@ MeshTally::checkMeshTemplateAndTranslations() const
       }
 
       if (incorrect_scaling)
-        mooseError("The centroids of the 'mesh_template' differ from the "
+        paramError("mesh_template",
+                   "The centroids of the 'mesh_template' differ from the "
                    "centroids of the [Mesh] by a factor of " +
-                   Moose::stringify(centroid_mesh(0) / centroid_template(0)) +
-                   ".\nDid you forget that the 'mesh_template' must be in "
-                   "the same units as the [Mesh]?");
+                       Moose::stringify(centroid_mesh(0) / centroid_template(0)) +
+                       ".\nDid you forget that the 'mesh_template' must be in "
+                       "the same units as the [Mesh]?");
     }
 
     // check if centroids are the same
@@ -226,12 +306,14 @@ MeshTally::checkMeshTemplateAndTranslations() const
                             !MooseUtils::absoluteFuzzyEqual(centroid_mesh(j), centroid_template(j));
 
     if (different_centroids)
-      mooseError(
-          "Centroid for element " + Moose::stringify(mesh_offset + e) + " in the [Mesh] (cm): " +
-          _openmc_problem.printPoint(centroid_mesh) + "\ndoes not match centroid for element " +
-          Moose::stringify(e) + " in the 'mesh_template' with instance " +
-          Moose::stringify(_instance) + " (cm): " + _openmc_problem.printPoint(centroid_template) +
-          "!\n\nThe copy transfer requires that the [Mesh] and 'mesh_template' be identical.");
+      paramError(
+          "mesh_template",
+          "Centroid for element " + Moose::stringify(elem_id) +
+              " in the [Mesh] (cm): " + _openmc_problem.printPoint(centroid_mesh) +
+              "\ndoes not match centroid for element " + Moose::stringify(e) +
+              " in the 'mesh_template' with instance " + Moose::stringify(_instance) +
+              " (cm): " + _openmc_problem.printPoint(centroid_template) +
+              "!\n\nThe copy transfer requires that the [Mesh] and 'mesh_template' be identical.");
   }
 }
 #endif

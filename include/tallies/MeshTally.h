@@ -23,6 +23,11 @@
 
 #include "openmc/tallies/filter_mesh.h"
 
+namespace libMesh
+{
+class ReplicatedMesh;
+}
+
 class MeshTally : public TallyBase
 {
 public:
@@ -31,7 +36,7 @@ public:
   MeshTally(const InputParameters & parameters);
 
   /**
-   * A function to generate the cell filter needed by this object.
+   * A function to generate the mesh filter needed by this object.
    * @return a pair where the first entry is the filter index in the global filter array and the
    * second entry is an OpenMC unstructured mesh filter
    */
@@ -82,7 +87,7 @@ protected:
   Point _mesh_translation;
 
   /// The index into an array of mesh translations.
-  unsigned int _instance;
+  const unsigned int _instance;
 
   /// The index of the mesh added by this tally.
   unsigned int _mesh_index;
@@ -91,5 +96,21 @@ protected:
   openmc::MeshFilter * _mesh_filter;
 
   /// OpenMC unstructured mesh instance for use with mesh tallies
-  const openmc::LibMesh * _mesh_template;
+  openmc::LibMesh * _mesh_template;
+
+  /// Blocks for which to add mesh tallies.
+  std::set<SubdomainID> _tally_blocks;
+
+  /// Whether we're using an indirection layer to map between the OpenMC mesh tally and the MOOSE mesh.
+  const bool _use_dof_map;
+
+  /**
+   * For use with block restriction only. A copy of the mesh is made which only contains elements in
+   * the blocks the user wishes to tally on. This is necessary at the moment as the point locators
+   * used in OpenMC to find collision sites are not passed a set of block IDs to filter elements.
+   * TODO: Fix this in OpenMC
+   */
+  std::unique_ptr<libMesh::ReplicatedMesh> _libmesh_mesh_copy;
+  /// A mapping between the OpenMC bins (active block restricted elements) and all elements.
+  std::vector<unsigned int> _bin_to_element_mapping;
 };
