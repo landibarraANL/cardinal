@@ -56,10 +56,10 @@ OpenMCProblemBase::validParams()
       "inactive_batches",
       "inactive_batches >= 0",
       "Number of inactive batches to run in OpenMC; this overrides the setting in the XML files.");
-  params.addRangeCheckedParam<int>("particles",
-                                   "particles > 0 ",
-                                   "Number of particles to run in each OpenMC batch; this "
-                                   "overrides the setting in the XML files.");
+  params.addRangeCheckedParam<unsigned int>("particles",
+                                            "particles > 0 ",
+                                            "Number of particles to run in each OpenMC batch; this "
+                                            "overrides the setting in the XML files.");
   params.addRangeCheckedParam<unsigned int>(
       "batches",
       "batches > 0",
@@ -86,7 +86,9 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
     _scaling(getParam<Real>("scaling")),
     _skip_statepoint(getParam<bool>("skip_statepoint")),
     _fixed_point_iteration(-1),
-    _total_n_particles(0)
+    _total_n_particles(0),
+    _has_adaptivity(getMooseApp().actionWarehouse().hasActions("set_adaptivity_options")),
+    _run_on_adaptivity_cycle(true)
 {
   if (isParamValid("tally_type"))
     mooseError("The tally system used by OpenMCProblemBase derived classes has been deprecated. "
@@ -176,7 +178,7 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
     openmc::settings::n_inactive = getParam<unsigned int>("inactive_batches");
 
   if (isParamValid("particles"))
-    openmc::settings::n_particles = getParam<int>("particles");
+    openmc::settings::n_particles = getParam<unsigned int>("particles");
 
   if (isParamValid("batches"))
   {
@@ -305,6 +307,15 @@ void
 OpenMCProblemBase::externalSolve()
 {
   TIME_SECTION("solveOpenMC", 1, "Solving OpenMC", false);
+
+  // Check to see if this is a steady solve. If so, we can skip extra OpenMC runs
+  // once the mesh stops getting adapted.
+  if (_has_adaptivity && !_run_on_adaptivity_cycle)
+  {
+    _console << " Skipping running OpenMC as the mesh has not changed!" << std::endl;
+    return;
+  }
+
   _console << " Running OpenMC with " << nParticles() << " particles per batch..." << std::endl;
 
   // apply a new starting fission source
@@ -328,11 +339,26 @@ OpenMCProblemBase::externalSolve()
   if (err)
     mooseError(openmc_err_msg);
 
-  _fixed_point_iteration += 1;
+  _fixed_point_iteration++;
 
   // save the latest fission source for re-use in the next iteration
   if (_reuse_source)
     writeSourceBank(sourceBankFileName());
+}
+
+void
+OpenMCProblemBase::syncSolutions(ExternalProblem::Direction direction)
+{
+  // Always run OpenMC on the first timestep in a steady solve with adaptivity. This
+  // ensures that OpenMC runs at least once during each Picard iteration.
+  _run_on_adaptivity_cycle |= (timeStep() == 1 && !isTransient());
+}
+
+bool
+OpenMCProblemBase::adaptMesh()
+{
+  _run_on_adaptivity_cycle = CardinalProblem::adaptMesh() || isTransient();
+  return _run_on_adaptivity_cycle;
 }
 
 void

@@ -55,17 +55,22 @@ NekPointValue::execute()
   const auto verbosity = pointInterpolation_t::VerbosityLevel::Basic;
   interp.find(verbosity);
 
+  // if this slot is not used for coupling, we are responsible for copying it to
+  // device before calling the interp function. Otherwise, Cardinal handles copying
+  // to device automatically.
+  if (_field == field::usrwrk00 && !_nek_problem->isUsrWrkSlotReservedForCoupling(0))
+    _nek_problem->copyIndividualScratchSlot(0);
+  if (_field == field::usrwrk01 && !_nek_problem->isUsrWrkSlotReservedForCoupling(1))
+    _nek_problem->copyIndividualScratchSlot(1);
+  if (_field == field::usrwrk02 && !_nek_problem->isUsrWrkSlotReservedForCoupling(2))
+    _nek_problem->copyIndividualScratchSlot(2);
+
   // interpolate the field onto those points
   occa::memory o_interpolated;
   int n_values = n;
   switch (_field)
   {
     case field::velocity_component:
-      paramError(
-          "field",
-          "The 'velocity_component' option is not currently enabled. If you would like to "
-          "interpolate V*hat(n), you should instead interpolate the three velocity components "
-          "individually and then post-apply the unit normal");
     case field::velocity_x:
     case field::velocity_y:
     case field::velocity_z:
@@ -87,10 +92,16 @@ NekPointValue::execute()
     case field::scalar03:
       n_values = n * nrs->Nscalar;
       o_interpolated = platform->device.malloc<dfloat>(n_values);
-      interp.eval(n_values, nrs->fieldOffset, nrs->cds->o_S, n, o_interpolated);
+      interp.eval(n_values, nekrs::scalarFieldOffset(), nrs->cds->o_S, n, o_interpolated);
       break;
     case field::unity:
-      _value = 1;
+      break;
+    case field::usrwrk00:
+    case field::usrwrk01:
+    case field::usrwrk02:
+      n_values = n * _nek_problem->nUsrWrkSlots();
+      o_interpolated = platform->device.malloc<dfloat>(n_values);
+      interp.eval(n_values, nekrs::fieldOffset(), nrs->o_usrwrk, n, o_interpolated);
       break;
     default:
       mooseError("Unhandled NekFieldEnum in NekPointValue!");
@@ -105,7 +116,8 @@ NekPointValue::execute()
   switch (_field)
   {
     case field::velocity_component:
-      // error already handled earlier
+      _value = interpolated[0] * _velocity_direction(0) + interpolated[1] * _velocity_direction(1) +
+               interpolated[2] * _velocity_direction(2);
       break;
     case field::velocity_x:
       _value = interpolated[0];
@@ -145,12 +157,23 @@ NekPointValue::execute()
       _value = interpolated[3];
       break;
     case field::unity:
+      _value = 1;
+      break;
+    case field::usrwrk00:
+      _value = interpolated[0];
+      break;
+    case field::usrwrk01:
+      _value = interpolated[1];
+      break;
+    case field::usrwrk02:
+      _value = interpolated[2];
       break;
     default:
       mooseError("Unhandled NekFieldEnum in NekPointValue!");
   }
 
   nekrs::dimensionalize(_field, _value);
+  _value += nekrs::referenceAdditiveScale(_field);
 }
 
 Real

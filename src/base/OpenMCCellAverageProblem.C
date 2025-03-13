@@ -192,7 +192,6 @@ OpenMCCellAverageProblem::OpenMCCellAverageProblem(const InputParameters & param
     _normalize_by_global(_run_mode == openmc::RunMode::FIXED_SOURCE
                              ? false
                              : getParam<bool>("normalize_by_global_tally")),
-    _has_adaptivity(getMooseApp().actionWarehouse().hasActions("set_adaptivity_options")),
     _using_skinner(isParamValid("skinner")),
     _need_to_reinit_coupling(_has_adaptivity || _using_skinner),
     _check_tally_sum(
@@ -560,7 +559,7 @@ OpenMCCellAverageProblem::initialSetup()
     std::set<int32_t> mapped_dag_cells;
     for (const auto & c : openmc::model::cells)
       for (const auto & [c_info, elem] : _cell_to_elem)
-        if (c->geom_type_ == openmc::GeometryType::DAG &&
+        if (c->geom_type() == openmc::GeometryType::DAG &&
             c_info.first == openmc::model::cell_map.at(c->id_))
           mapped_dag_cells.insert(c->id_);
 
@@ -570,10 +569,10 @@ OpenMCCellAverageProblem::initialSetup()
     {
       auto no_void =
           std::find(c->material_.begin(), c->material_.end(), MATERIAL_VOID) == c->material_.end();
-      if (mapped_dag_cells.count(c->id_) == 0 && c->geom_type_ == openmc::GeometryType::DAG &&
+      if (mapped_dag_cells.count(c->id_) == 0 && c->geom_type() == openmc::GeometryType::DAG &&
           no_void)
         num_unmapped++;
-      if (c->geom_type_ == openmc::GeometryType::DAG)
+      if (c->geom_type() == openmc::GeometryType::DAG)
         num_dag_cells++;
     }
 
@@ -728,6 +727,84 @@ OpenMCCellAverageProblem::getTallyTriggerParameters(const InputParameters & para
     if (_skip_statepoint)
       openmc::settings::statepoint_batch.clear();
   }
+}
+
+std::vector<const TallyBase *>
+OpenMCCellAverageProblem::getTalliesByScore(const std::string & score)
+{
+  // Loop over all of the tallies and check to see if they contain the requested score.
+  std::vector<const TallyBase *> tallies;
+  for (const auto & t : _local_tallies)
+    if (t->hasScore(score))
+      tallies.push_back(t.get());
+
+  return tallies;
+}
+
+std::vector<const MooseVariableFE<Real> *>
+OpenMCCellAverageProblem::getTallyScoreVariables(const std::string & score, THREAD_ID tid)
+{
+  std::vector<const MooseVariableFE<Real> *> score_vars;
+  const auto & tallies = _local_tallies;
+  for (const auto & t : tallies)
+  {
+    if (t->hasScore(score))
+    {
+      auto vars = t->getScoreVars(score);
+      for (const auto & v : vars)
+        score_vars.emplace_back(dynamic_cast<const MooseVariableFE<Real> *>(&getVariable(tid, v)));
+    }
+  }
+
+  if (score_vars.size() == 0)
+    mooseError("No tallies contain the requested score " + score + "!");
+
+  return score_vars;
+}
+
+std::vector<const VariableValue *>
+OpenMCCellAverageProblem::getTallyScoreVariableValues(const std::string & score, THREAD_ID tid)
+{
+  std::vector<const VariableValue *> score_vars;
+  const auto & tallies = _local_tallies;
+  for (const auto & t : tallies)
+  {
+    if (t->hasScore(score))
+    {
+      auto vars = t->getScoreVars(score);
+      for (const auto & v : vars)
+        score_vars.emplace_back(
+            &(dynamic_cast<MooseVariableFE<Real> *>(&getVariable(tid, v))->sln()));
+    }
+  }
+
+  if (score_vars.size() == 0)
+    mooseError("No tallies contain the requested score " + score + "!");
+
+  return score_vars;
+}
+
+std::vector<const VariableValue *>
+OpenMCCellAverageProblem::getTallyScoreNeighborVariableValues(const std::string & score,
+                                                              THREAD_ID tid)
+{
+  std::vector<const VariableValue *> score_vars;
+  const auto & tallies = _local_tallies;
+  for (const auto & t : tallies)
+  {
+    if (t->hasScore(score))
+    {
+      auto vars = t->getScoreVars(score);
+      for (const auto & v : vars)
+        score_vars.emplace_back(
+            &(dynamic_cast<MooseVariableFE<Real> *>(&getVariable(tid, v))->slnNeighbor()));
+    }
+  }
+
+  if (score_vars.size() == 0)
+    mooseError("No tallies contain the requested score " + score + "!");
+
+  return score_vars;
 }
 
 void
@@ -1847,7 +1924,8 @@ OpenMCCellAverageProblem::mapElemsToCells()
     // geometry to the MOOSE mesh. The skinner is currently not set up to ignore elements that
     // map to cells and will generate DAGMC geometry that overlaps with pre-existing CSG cells.
     // TODO: This would be nice to fix, but would require a rework of the skinner.
-    if (openmc::model::cells[cell_index]->geom_type_ == openmc::GeometryType::CSG && _using_skinner)
+    if (openmc::model::cells[cell_index]->geom_type() == openmc::GeometryType::CSG &&
+        _using_skinner)
       mooseError("At present, the 'skinner' can only be used when the only OpenMC geometry "
                  "which maps to the MOOSE mesh is DAGMC geometry. Your geometry contains CSG "
                  "cells which map to the MOOSE mesh.");
@@ -2443,6 +2521,14 @@ OpenMCCellAverageProblem::checkNormalization(const Real & sum, unsigned int glob
 void
 OpenMCCellAverageProblem::syncSolutions(ExternalProblem::Direction direction)
 {
+  OpenMCProblemBase::syncSolutions(direction);
+
+  // We can skip syncronizing the solution when running with adaptivity
+  // and the mesh hasn't changed. This only applies to steady-state calculations
+  // as the mesh is adapted once per timestep in a transient calculation.
+  if (_has_adaptivity && !_run_on_adaptivity_cycle)
+    return;
+
   _aux->serializeSolution();
 
   switch (direction)
@@ -2985,7 +3071,7 @@ OpenMCCellAverageProblem::updateOpenMCGeometry()
   // Afterwards, the cells contained in the list can be deleted.
   std::vector<int32_t> cells_to_delete;
   for (auto [id, index] : openmc::model::cell_map)
-    if (openmc::model::cells[index]->geom_type_ == openmc::GeometryType::DAG)
+    if (openmc::model::cells[index]->geom_type() == openmc::GeometryType::DAG)
       cells_to_delete.push_back(openmc::model::cells[index]->id_);
 
   for (auto cell : cells_to_delete)
@@ -3005,7 +3091,7 @@ OpenMCCellAverageProblem::updateOpenMCGeometry()
   // deferred.
   std::vector<int> surfaces_to_delete;
   for (auto [id, index] : openmc::model::surface_map)
-    if (openmc::model::surfaces[index]->geom_type_ == openmc::GeometryType::DAG)
+    if (openmc::model::surfaces[index]->geom_type() == openmc::GeometryType::DAG)
       surfaces_to_delete.push_back(openmc::model::surfaces[index]->id_);
 
   for (auto surface : surfaces_to_delete)
