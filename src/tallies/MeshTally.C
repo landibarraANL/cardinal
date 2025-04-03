@@ -54,6 +54,9 @@ MeshTally::MeshTally(const InputParameters & parameters)
     _instance(getParam<unsigned int>("instance")),
     _use_dof_map(_is_adaptive || isParamValid("blocks"))
 {
+  bool nu_scatter =
+      std::find(_tally_score.begin(), _tally_score.end(), "nu-scatter") != _tally_score.end();
+
   // Error check the estimators.
   if (isParamValid("estimator"))
   {
@@ -62,7 +65,7 @@ MeshTally::MeshTally(const InputParameters & parameters)
                  "Tracklength estimators are currently incompatible with mesh tallies!");
   }
   else
-    _estimator = openmc::TallyEstimator::COLLISION;
+    _estimator = nu_scatter ? openmc::TallyEstimator::ANALOG : openmc::TallyEstimator::COLLISION;
 
   // Error check the mesh template.
   if (_mesh.getMesh().allow_renumbering() && !_mesh.getMesh().is_replicated())
@@ -236,7 +239,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                                     _mesh_template->volume(e) * _openmc_problem.scaling() *
                                     _openmc_problem.scaling() * _openmc_problem.scaling()
                               : 1.0;
-      total += unnormalized_tally;
+      total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
 
       auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
       auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
